@@ -9,7 +9,7 @@ export class DriveAssist {
   constructor(session, entry, level) {
     this.session = session; this.entry = entry; this.level = level;
     this.copilot = new AIDriver(entry.car, session.track, session.line, session.profile,
-      { name: 'assist', pace: 0.97, consistency: 1, aggression: 0.5, composure: 1 }, 7, 1);
+      { name: 'assist', pace: 0.935, consistency: 1, aggression: 0.5, composure: 1 }, 7, 1);
     this.copilot.launchDelay = 0;
     this.active = 0; // 0..1 how much the assist is steering (for the HUD)
   }

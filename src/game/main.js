@@ -198,6 +198,7 @@ function newSession() {
   $('hud').style.display = 'block'; $('overlay').style.display = 'none';
   $('board').style.display = isRace ? 'block' : 'none';
   $('posbox').style.display = p.kind === 'hub' ? 'none' : '';
+  $('prompt').style.display = 'none';
   if (p.kind === 'hub') buildHub();
   state = 'playing';
   audio.mute(false);
