@@ -37,6 +37,7 @@ export class Session {
   constructor(track, opts = {}) {
     this.track = track;
     this.mode = opts.mode || 'practice';
+    this.rolling = !!opts.rolling; // start already at speed (qualifying flying laps)
     this.totalLaps = opts.laps ?? 3;
     this.entries = [];
     this.time = 0;
@@ -77,10 +78,12 @@ export class Session {
     const tr = this.track;
     const startS = tr.length * (tr.def.start ?? 0);
     const slot = e.gridSlot;
-    const back = this.mode === 'race' ? 10 + slot * 8 : 30 + slot * 12;
+    const back = this.mode === 'race' ? 10 + slot * 8 : this.rolling ? 450 : 30 + slot * 12;
     const lat = this.mode === 'race' ? (slot % 2 ? -3 : 3) : 0;
-    const p = tr.pointAt(startS - back, lat);
-    e.car.reset(p.x, p.z, p.yaw, this.mode === 'race' ? 0 : 0);
+    const p = tr.pointAt(startS - back, this.rolling ? this.line.offset[tr.idx(Math.floor(tr.wrapS(startS - back) / tr.ds))] : lat);
+    const v0 = this.rolling ? this.profile[tr.idx(Math.floor(tr.wrapS(startS - back) / tr.ds))] * 0.9 : 0;
+    e.car.reset(p.x, p.z, p.yaw, v0);
+    if (this.rolling) { e.car.gear = 5; for (const w of e.car.wheels) w.temp = 85; }
     e.hint = -1;
     const pr = tr.project(p.x, p.z);
     e.hint = pr.i; e.s = pr.s; e.lat = pr.lat;

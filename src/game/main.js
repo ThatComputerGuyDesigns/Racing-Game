@@ -151,7 +151,7 @@ function newSession() {
   const diff = DIFFICULTY[cfg.difficulty];
   const setup = career && (p.career || p.kind === 'hub') ? carSetup(career) : {};
   session = new Session(tr, { mode: isRace ? 'race' : 'practice', laps: isRace ? p.laps : 99, weather,
-    wearMul: isRace ? wearMulFor(p.laps) : 1, estLap: referenceLapQuick(p.track) });
+    wearMul: isRace ? wearMulFor(p.laps) : 1, estLap: referenceLapQuick(p.track), rolling: p.kind === 'quali' });
   session.env.temp = startWet ? 14 : 24;
   const myCompound = p.compound || (startWet ? 'inter' : 'medium');
   const addAI = (pers, slot, k) => {
@@ -202,7 +202,7 @@ function newSession() {
   state = 'playing';
   audio.mute(false);
   toast(p.kind === 'race' ? `${tr.name} · ${p.laps} laps${weather === 'dynamic' ? ' · changeable weather' : ''}`
-    : p.kind === 'quali' ? `Qualifying · ${tr.name} · ${p.qualiLaps - 1} flying laps (Enter to end)`
+    : p.kind === 'quali' ? `Qualifying · ${tr.name} · ${p.qualiLaps - 1} flying laps, best counts (Enter to end)`
     : p.kind === 'hub' ? 'Coast Road · drive to the glowing gate for your next event · G garage' : `${tr.name} · hot lap`);
 }
 
