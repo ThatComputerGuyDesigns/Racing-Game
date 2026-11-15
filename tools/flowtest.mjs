@@ -14,7 +14,11 @@ await page.evaluate(() => window.__game.advance(6)); await shot('1-hub');
 console.log('hub ok', await page.evaluate(() => document.getElementById('prompt').innerText.replace(/\n/g, ' | ')));
 await page.evaluate(() => window.__game.startWeekend('silverstone'));
 await wait(() => window.__game.plan.kind === 'quali' && window.__game.state === 'playing');
-for (let i = 0; i < 12 && await page.evaluate(() => window.__game.state === 'playing'); i++) await page.evaluate(() => window.__game.advance(30));
+for (let i = 0; i < 16; i++) {
+  const st = await page.evaluate(() => window.__game.state);
+  if (st !== 'playing') break;
+  await page.evaluate(() => window.__game.advance(30));
+}
 console.log('quali laps', await page.evaluate(() => window.__game.player.laps.map(l => l.time.toFixed(2)).join(', ')), 'state', await page.evaluate(() => window.__game.state));
 await wait(() => window.__game.state === 'dialog'); await shot('2-quali');
 await page.evaluate(() => window.__game.startWeekendRace('medium'));
