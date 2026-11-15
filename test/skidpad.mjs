@@ -18,4 +18,4 @@ export function skidpad(v, assists = { abs: true, tc: true, stability: 0, steerA
   const m = spec.mass + 30, down = 0.5 * 1.225 * spec.cla * v * v;
   return { v, g: best / 9.81, muEff: best / (9.81 + down / m) };
 }
-if (process.argv[1].endsWith('skidpad.mjs')) for (const v of [15, 30, 50, 70]) console.log(skidpad(v));
+if (process.argv[1]?.endsWith('skidpad.mjs')) for (const v of [15, 30, 50, 70]) console.log(skidpad(v));

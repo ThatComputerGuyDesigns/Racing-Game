@@ -1,4 +1,17 @@
 // Keyboard + gamepad input with smoothing so keyboard players get progressive steering.
+
+/** Pure keyboard filter (shared with the headless keyboard-bot test). */
+export function keyboardFilter(st, keys, dt) {
+  const target = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
+  // ramp in quickly, snap back faster (self-centering), reverse fastest
+  const rate = target === 0 ? 8 : (st.steer !== 0 && Math.sign(target) !== Math.sign(st.steer) ? 11 : 4.5);
+  const d = target - st.steer;
+  st.steer += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
+  st.throttle += ((keys.up ? 1 : 0) - st.throttle) * Math.min(1, dt * 12);
+  st.brake += ((keys.down ? 1 : 0) - st.brake) * Math.min(1, dt * 16);
+  return st;
+}
+
 export class Input {
   constructor() {
     this.keys = new Set();
@@ -27,13 +40,7 @@ export class Input {
     const k = this.keys;
     const left = k.has('ArrowLeft') || k.has('KeyA'), right = k.has('ArrowRight') || k.has('KeyD');
     const up = k.has('ArrowUp') || k.has('KeyW'), down = k.has('ArrowDown') || k.has('KeyS') || k.has('Space');
-    let target = (left ? 1 : 0) - (right ? 1 : 0);
-    // keyboard steering: ramp in, faster ramp out (self-centering)
-    const rate = target === 0 ? 6 : (Math.sign(target) !== Math.sign(this.steer) && this.steer !== 0 ? 9 : 3.2);
-    const d = target - this.steer;
-    this.steer += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
-    this.throttle += ((up ? 1 : 0) - this.throttle) * Math.min(1, dt * 10);
-    this.brake += ((down ? 1 : 0) - this.brake) * Math.min(1, dt * 14);
+    keyboardFilter(this, { left, right, up, down }, dt);
     let shiftUp = this.hit('KeyE'), shiftDown = this.hit('KeyQ');
 
     const pad = this._pad();

@@ -60,8 +60,8 @@ export function speedProfile(track, line, spec, opts = {}) {
   const kDown = 0.5 * RHO * spec.cla / m;
   const kDrag = 0.5 * RHO * spec.cda / m;
   const muAt = (v) => muBase * (1 - 0.15 * kDown * v * v / G);
-  const power = opts.power ?? 450000;
-  const vTop = 92;
+  const power = opts.power ?? 680000;
+  const vTop = 100;
   const n = track.n, ds = track.ds;
   const v = new Float64Array(n);
   for (let i = 0; i < n; i++) {

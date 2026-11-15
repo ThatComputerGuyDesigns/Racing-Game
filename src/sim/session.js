@@ -48,13 +48,13 @@ export class Session {
     this.line = line; this.profile = profile;
   }
 
-  addCar({ name, isPlayer = false, persona = null, spec = CAR_SPECS.formula, compound, fuel, assists, setup, gridSlot = 0, seed = 1 }) {
+  addCar({ name, isPlayer = false, persona = null, difficulty = 1, spec = CAR_SPECS.formula, compound, fuel, assists, setup, gridSlot = 0, seed = 1 }) {
     const car = new Car(spec, { compound, fuel, assists, setup });
     const e = new Entry(car, this.track, name, isPlayer);
     e.gridSlot = gridSlot;
     if (persona) {
       e.persona = persona;
-      e.ai = new AIDriver(car, this.track, this.line, this.profile, persona, seed);
+      e.ai = new AIDriver(car, this.track, this.line, this.profile, persona, seed, difficulty);
       car.assists = { abs: true, tc: true, stability: 0, autoGear: true, steerAssist: 0 };
     }
     this.entries.push(e);
@@ -101,7 +101,7 @@ export class Session {
     // AI decisions at frame rate, physics at 240 Hz
     const inputs = this.entries.map(e => {
       if (e.finished && e.ai == null) return { throttle: 0, brake: 0.3, steer: 0 };
-      let inp = e.ai ? e.ai.update(dt, others, this.env) : (playerInput || { throttle: 0, brake: 0, steer: 0 });
+      let inp = e.ai ? e.ai.update(dt, others, this.env, racing) : (playerInput || { throttle: 0, brake: 0, steer: 0 });
       if (!racing) inp = { ...inp, throttle: e.ai ? 0.35 : inp.throttle, brake: 1, steer: 0 };
       if (e.finished && e.ai) inp = { ...inp, throttle: Math.min(inp.throttle, 0.4) };
       return inp;

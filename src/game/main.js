@@ -9,6 +9,8 @@ import { buildCar, syncCar } from './carmesh.js';
 import { Particles, SkidMarks, makeComposer } from './fx.js';
 import { Input } from './input.js';
 import { Audio } from './audio.js';
+import { ASSIST_PRESETS, DIFFICULTY } from '../sim/assists.js';
+import { RaceLine, brakeAssist } from './raceline.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -44,13 +46,11 @@ const skids = new SkidMarks(scene);
 const cfg = {
   track: params.get('track') || 'spa', mode: params.get('mode') || 'race', laps: +(params.get('laps') || 5),
   weather: params.get('weather') || 'dry', assist: params.get('assist') || 'full',
-  autopilot: params.has('autopilot'),
+  autopilot: params.has('autopilot'), difficulty: params.get('difficulty') || 'medium',
 };
-const ASSISTS = {
-  full:   { abs: true, tc: true, stability: 0.6, steerAssist: 0.7, autoGear: true },
-  medium: { abs: true, tc: true, stability: 0.25, steerAssist: 0.5, autoGear: true },
-  off:    { abs: false, tc: false, stability: 0, steerAssist: 0.25, autoGear: false },
-};
+let lineMode = null; // null = follow assist preset
+let raceLine = null;
+const ASSISTS = ASSIST_PRESETS;
 
 function drawTrackPreview(cv, tr, w, h, color = '#f1f3f5', lw = 3) {
   const g = cv.getContext('2d');
@@ -79,13 +79,16 @@ function buildMenu() {
     el.onclick = () => { cfg.track = id; host.querySelectorAll('.card').forEach(c => c.classList.remove('sel')); el.classList.add('sel'); };
     host.append(el);
   }
-  for (const key of ['mode', 'laps', 'weather', 'assist']) {
+  for (const key of ['mode', 'laps', 'weather', 'assist', 'difficulty']) {
     const seg = $(key);
     seg.querySelectorAll('button').forEach(b => {
       b.classList.toggle('sel', String(cfg[key]) === b.dataset.v);
       b.onclick = () => { cfg[key] = key === 'laps' ? +b.dataset.v : b.dataset.v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b)); $('go').textContent = cfg.mode === 'race' ? 'RACE' : 'DRIVE'; };
     });
   }
+  const notes = { full: 'Racing line, braking assist, grip-limited steering, TC, ABS, stability, auto gears.', medium: 'Racing line in corners, TC, ABS, light stability, auto gears. You brake.', off: 'No line, no TC/ABS, manual gears (Q/E). For wheel or pad.' };
+  const setNote = () => { $('assistNote').textContent = notes[cfg.assist]; };
+  setNote(); $('assist').addEventListener('click', () => setTimeout(setNote));
   $('go').onclick = () => { audio.start(); startSession(); };
 }
 
@@ -134,7 +137,7 @@ function newSession() {
     let slot = 0;
     sorted.forEach((p, k) => {
       if (k === 7) player = session.addCar({ name: 'You', isPlayer: true, assists: ASSISTS[cfg.assist], compound, gridSlot: slot++, fuel: 30 });
-      session.addCar({ name: p.name, persona: p, compound, gridSlot: slot++, seed: 17 + k * 31, fuel: 30 });
+      session.addCar({ name: p.name, persona: p, compound, gridSlot: slot++, seed: 17 + k * 31, fuel: 30, difficulty: DIFFICULTY[cfg.difficulty] });
     });
     session.startRace();
   } else {
@@ -148,6 +151,9 @@ function newSession() {
     const m = buildCar(color, accent, COMPOUNDS[e.car.compound].color);
     scene.add(m); meshes.set(e, m);
   }
+  raceLine?.dispose(scene);
+  raceLine = new RaceLine(scene, tr, session.line, session.profile, player.car.spec);
+  lineMode = null;
   bestTrace = null; curTrace = [];
   cam.yaw = player.car.yaw; cam.pos.set(player.car.x - Math.sin(cam.yaw) * 8, 3, player.car.z - Math.cos(cam.yaw) * 8);
   $('hud').style.display = 'block'; $('overlay').style.display = 'none';
@@ -273,12 +279,12 @@ function updateCamera(dt) {
   const speed = c.speed;
   let fov = 60 + Math.min(18, speed * 0.17);
   if (mode === 'chase' || mode === 'far') {
-    const dist = mode === 'far' ? 10.5 : 7.2, hgt = mode === 'far' ? 3.4 : 2.1;
+    const dist = mode === 'far' ? 9.5 : 5.6, hgt = mode === 'far' ? 3.0 : 1.75;
     const back = dist + speed * 0.012;
     tmpV.set(c.x - sy * back, y + hgt, c.z - cy * back);
     cam.pos.lerp(tmpV, Math.min(1, dt * 12));
     camera.position.copy(cam.pos);
-    lookV.set(c.x + sy * 6, y + 0.9, c.z + cy * 6);
+    lookV.set(c.x + sy * 8, y + 1.0, c.z + cy * 8);
   } else {
     const fwd = mode === 'cockpit' ? 0.0 : 1.2, h = mode === 'cockpit' ? 0.98 : 0.62;
     camera.position.set(c.x + Math.sin(c.yaw) * fwd, y + h, c.z + Math.cos(c.yaw) * fwd);
@@ -380,7 +386,14 @@ function tick(dt, now) {
     if (input.hit('Backspace')) resetCar();
     if (input.hit('KeyT')) { player.car.assists.tc = !player.car.assists.tc; toast('Traction control ' + (player.car.assists.tc ? 'ON' : 'OFF')); }
     if (input.hit('KeyY')) { player.car.assists.abs = !player.car.assists.abs; toast('ABS ' + (player.car.assists.abs ? 'ON' : 'OFF')); }
+    if (input.hit('KeyL')) {
+      const order = ['full', 'corners', 'off'];
+      const cur = lineMode ?? ASSISTS[cfg.assist].line;
+      lineMode = order[(order.indexOf(cur) + 1) % 3];
+      toast('Racing line: ' + { full: 'full', corners: 'corners only', off: 'off' }[lineMode]);
+    }
     let pIn = inp;
+    if (player.car.assists.brakeAssist) pIn = brakeAssist(session.track, session.profile, player.s, player.car.speed, pIn);
     if (autopilot) pIn = autopilot.update(dt, session.entries.map(e => ({ car: e.car, s: e.s, hint: e.hint })), session.env);
     if (state === 'results' || player.finished) pIn = { throttle: 0, brake: 0.4, steer: 0 };
     session.update(dt, pIn);
@@ -395,6 +408,7 @@ function tick(dt, now) {
       const rel = ((player.s - startS) % L + L) % L, bin = Math.floor(rel / 10);
       if (curTrace[bin] == null) curTrace[bin] = session.time - player.lapStart;
     }
+    raceLine.update(player.s, player.car.speed, lineMode ?? ASSISTS[cfg.assist].line);
     const kerb = updateCamera(dt);
     updateFX(dt);
     updateHUD(dt);

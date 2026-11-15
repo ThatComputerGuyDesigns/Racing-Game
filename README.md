@@ -12,7 +12,7 @@ then open http://localhost:5173.
 
 ## Controls
 Arrows/WASD drive · Q/E shift (manual gearbox) · C camera · R instant restart · Backspace reset car ·
-T/Y toggle TC/ABS · Esc pause. Gamepad: left stick, RT/LT, LB/RB shift, Y camera, Start pause.
+L racing line (full / corners / off) · T/Y toggle TC/ABS · Esc pause. Gamepad: left stick, RT/LT, LB/RB shift, Y camera, Start pause.
 `?quality=low` for weak GPUs.
 
 ## Circuits
@@ -21,7 +21,8 @@ Red Mesa Speedway. Real layouts come from open centerline data (see CREDITS.md).
 
 ## Tests
 `npm test` runs the automated handling and AI suite: skidpad grip, AI hot laps on every circuit
-(lap time window, off-track %, wall hits) and a full-field race.
+(lap time window, off-track %, wall hits), a keyboard-only bot that must lap cleanly through the real
+keyboard filter + assists, and full-field races that must finish with little contact.
 `node test/race.mjs spa` and `node test/lapsim.mjs` print details.
 
 ## GitHub Pages

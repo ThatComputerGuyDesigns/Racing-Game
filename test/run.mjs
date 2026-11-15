@@ -2,6 +2,7 @@
 import { runLapSim } from './lapsim.mjs';
 import { skidpad } from './skidpad.mjs';
 import { runRace } from './race.mjs';
+import { keyboardLap } from './keyboardbot.mjs';
 let fail = 0;
 const check = (ok, msg) => { console.log((ok ? 'PASS ' : 'FAIL ') + msg); if (!ok) fail++; };
 // 1. skidpad: limit lateral grip in a believable sim-cade band, rising with downforce
@@ -15,7 +16,14 @@ for (const [id, [lo, hi]] of Object.entries(expect)) {
   const t = r.laps[1];
   check(r.laps.length === 2 && t > lo && t < hi && r.offPct < 3, `${r.track}: ${t?.toFixed(2)}s, off ${r.offPct.toFixed(1)}%, walls ${r.wallHits}`);
 }
-// 3. full-field race: field finishes
-const race = runRace('monza', 1);
-check(race.finished >= race.of - 2, `Monza race: ${race.finished}/${race.of} finished, ${race.impacts} contacts`);
+// 3. keyboard drivability: digital-only inputs through the real keyboard filter + assists
+for (const [t, preset] of [['spa', 'full'], ['suzuka', 'full'], ['silverstone', 'medium']]) {
+  const r = keyboardLap(t, preset, 2);
+  check(r.laps.length === 2 && r.offPct < 3 && r.walls === 0, `keyboard ${preset} @ ${r.track}: ${r.laps.join(' / ')}s, off ${r.offPct}%`);
+}
+// 4. full-field races: everyone finishes, racing stays clean
+for (const t of ['monza', 'spa']) {
+  const race = runRace(t, 1);
+  check(race.finished >= race.of - 1 && race.impacts <= 15, `${t} race: ${race.finished}/${race.of} finished, ${race.impacts} contacts`);
+}
 process.exit(fail ? 1 : 0);

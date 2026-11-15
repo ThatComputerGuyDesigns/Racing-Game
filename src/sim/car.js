@@ -3,17 +3,17 @@
 // gearbox, brakes and driver assists. Pure JS: runs in browser and Node tests.
 
 export const COMPOUNDS = {
-  soft:   { name: 'Soft',   grip: 1.06, wear: 1.7, optT: 92,  window: 28, color: '#e8333a' },
-  medium: { name: 'Medium', grip: 1.00, wear: 1.0, optT: 98,  window: 32, color: '#f2c94c' },
-  hard:   { name: 'Hard',   grip: 0.95, wear: 0.6, optT: 105, window: 36, color: '#eeeeee' },
-  inter:  { name: 'Inter',  grip: 0.90, wear: 1.2, optT: 75,  window: 30, color: '#3fb950', wet: 0.80 },
+  soft:   { name: 'Soft',   grip: 1.06, wear: 1.7, optT: 72,  window: 28, color: '#e8333a' },
+  medium: { name: 'Medium', grip: 1.00, wear: 1.0, optT: 78,  window: 32, color: '#f2c94c' },
+  hard:   { name: 'Hard',   grip: 0.95, wear: 0.6, optT: 86,  window: 36, color: '#eeeeee' },
+  inter:  { name: 'Inter',  grip: 0.90, wear: 1.2, optT: 60,  window: 30, color: '#3fb950', wet: 0.80 },
 };
 
 export const CAR_SPECS = {
   // Original open-wheel "Velocity Formula" class car (Apex V8 hybrid concept)
   formula: {
     name: 'VF-26',
-    mass: 760,          // kg incl. driver, without fuel
+    mass: 798,          // kg incl. driver, without fuel (F1-class)
     fuelMax: 70,        // kg
     wheelbase: 3.4,
     cgFront: 0.46,      // fraction of weight on front axle
@@ -25,17 +25,17 @@ export const CAR_SPECS = {
     loadSens: 0.08,     // grip loss per unit of Fz/Fz0 above 1
     alphaPeak: 0.12,    // rad
     rollDistF: 0.58,
-    rearGrip: 1.07,     // wider rears: stable, understeer-biased limit balance    // fraction of lateral load transfer carried by front
-    cda: 1.05, cla: 2.9, aeroBalF: 0.43,
+    rearGrip: 1.07,     // wider rears: stable, understeer-biased limit balance
+    cda: 1.25, cla: 4.4, aeroBalF: 0.43,
     rollingRes: 0.012,
     maxSteer: 0.42,     // rad at the wheel
-    brakeForce: 30000,  // N total requested at full pedal (exceeds grip -> lockups)
+    brakeForce: 42000,  // N total requested at full pedal (exceeds grip -> lockups)
     brakeBias: 0.57,
-    finalDrive: 4.5,
+    finalDrive: 4.1,
     gears: [2.9, 2.2, 1.8, 1.52, 1.32, 1.17, 1.05],
     shiftTime: 0.06,
     idleRpm: 4000, redline: 12500,
-    torque: [[3000, 260], [6000, 350], [9000, 420], [11000, 410], [12500, 360], [13000, 200]],
+    torque: [[3000, 380], [6000, 520], [9000, 610], [11000, 620], [12500, 560], [13000, 300]],
     drivetrainEff: 0.92,
     diffLock: 0.35,     // 0 open, 1 spool (power oversteer tendency)
   },
@@ -137,17 +137,26 @@ export class Car {
     if (this.gear === 1 && u < 0.5 && brake > 0.5 && throttle < 0.1) this.reverse = true;
     if (throttle > 0.1) this.reverse = false;
 
-    // speed-sensitive steering lock + optional countersteer stability help
+    // Grip-based steering lock: with assist, full input = the steering angle that puts the
+    // front tyres at their peak slip for this speed (max cornering, no scrubbing understeer).
     const assistAmt = A.steerAssist ?? 0;
-    const speedFactor = 1 / (1 + assistAmt * (speed / 32) ** 2);
-    let targetSteer = steerIn * s.maxSteer * Math.max(0.18, speedFactor);
+    const vv = Math.max(speed, 6);
+    const kD = 0.5 * RHO * s.cla / m;
+    const muE = 1.35 * (1 - 0.15 * kD * vv * vv / G);
+    const aLat = muE * (G + kD * vv * vv);
+    const gripLock = Math.min(s.maxSteer, Math.atan(s.wheelbase * aLat / (vv * vv)) + s.alphaPeak * 0.9);
+    const lock = s.maxSteer + (gripLock - s.maxSteer) * assistAmt;
+    let targetSteer = steerIn * lock;
     if (A.stability > 0 && speed > 5) {
       // body slip angle; help the driver countersteer when the rear steps out
       const beta = Math.atan2(v, Math.abs(u));
-      targetSteer += -beta * 0.8 * A.stability * (1 - Math.abs(steerIn) * 0.5);
+      targetSteer += -beta * 0.9 * A.stability;
+      // yaw damping: resist yaw rate beyond what the path needs
+      const rNeed = aLat / vv;
+      if (Math.abs(this.r) > rNeed * 1.05) targetSteer -= Math.sign(this.r) * (Math.abs(this.r) - rNeed * 1.05) * 0.25 * A.stability;
     }
     targetSteer = Math.max(-s.maxSteer, Math.min(s.maxSteer, targetSteer));
-    const steerRate = 3.2; // rad/s at the wheel (physical rack speed)
+    const steerRate = 4.5; // rad/s at the wheel (physical rack speed)
     const dS = targetSteer - this.steerAngle;
     this.steerAngle += Math.max(-steerRate * dt, Math.min(steerRate * dt, dS));
     const delta = this.steerAngle;
@@ -243,14 +252,20 @@ export class Car {
       if (!w.front) fxReq += driveForce / 2;
       const bshare = w.front ? s.brakeBias / 2 : (1 - s.brakeBias) / 2;
       let bReq = (this.reverse ? 0 : brake) * s.brakeForce * brakeMul * bshare;
-      if (A.abs && bReq > fmax * 0.97) { absCut = Math.max(absCut, 1); bReq = fmax * 0.97; }
+      if (A.abs) {
+        // cornering ABS: leave the tyre the lateral grip it is using (prevents trail-brake spins)
+        const latUseB = Math.min(0.95, Math.abs(w.alpha) / s.alphaPeak);
+        const allowB = fmax * Math.max(0.3, Math.sqrt(1 - latUseB * latUseB)) * 0.97;
+        if (bReq > allowB) { absCut = 1; bReq = allowB; }
+      }
       if (Math.abs(vf) > 0.3) fxReq -= Math.sign(vf) * bReq; else fxReq -= Math.sign(fxReq) * Math.min(Math.abs(fxReq), bReq);
       // lateral demand from slip angle
       const fyPure = -fmax * lateralCurve(w.alpha / s.alphaPeak);
       // traction control: cap drive so the rear keeps the lateral grip it is using
       if (!w.front && A.tc && fxReq > 0) {
-        const latUse = Math.min(0.98, Math.abs(fyPure) / Math.max(1, fmax));
-        const allow = fmax * Math.max(0.25, Math.sqrt(1 - latUse * latUse)) * 0.96;
+        // judge by normalised slip angle: past the peak the force drops but the tyre is still saturated
+        const latUse = Math.min(0.98, Math.abs(w.alpha) / s.alphaPeak);
+        const allow = fmax * Math.max(0.12, Math.sqrt(1 - latUse * latUse)) * 0.95;
         if (fxReq > allow) { tcCut = Math.max(tcCut, Math.min(1, fxReq / allow - 1)); fxReq = allow; }
       }
       // combined slip: friction ellipse with sliding when longitudinal demand exceeds grip
@@ -319,12 +334,12 @@ export class Car {
   _tempGrip(T, comp) {
     const d = (T - comp.optT) / comp.window;
     // cold tyres lose more than slightly hot ones; overheating hurts beyond window
-    const pen = d < 0 ? 0.06 * d * d : 0.12 * d * d;
+    const pen = d < 0 ? 0.06 * d * d : 0.08 * d * d;
     return Math.max(0.78, 1 - pen);
   }
 
   _thermal(w, dt, speed, env, comp) {
-    const heat = w.slipPower * 0.0003 + w.fz * speed * 0.000022;
+    const heat = w.slipPower * 0.00022 + w.fz * speed * 0.000011;
     const cool = (w.temp - env.temp) * (0.02 + speed * 0.0016) * (1 + (env.wet || 0) * 2.5);
     w.temp += (heat - cool) * dt;
     // wear grows with sliding energy and temperature above window

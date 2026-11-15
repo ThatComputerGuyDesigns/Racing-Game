@@ -26,6 +26,6 @@ export function runLapSim(trackId, { laps = 3, persona, compound = 'medium', wet
   return res;
 }
 
-if (process.argv[1].endsWith('lapsim.mjs')) {
+if (process.argv[1]?.endsWith('lapsim.mjs')) {
   for (const id of (process.argv[2] ? [process.argv[2]] : Object.keys(TRACK_DEFS))) { const r = runLapSim(id); console.log(r.track.padEnd(24), 'laps', r.laps.join(' '), 'off%', r.offPct.toFixed(1), 'walls', r.wallHits, 'vmax', r.vmax.toFixed(0), 'T', r.temps.join(','), 'wear', r.wear.join(',')); }
 }

@@ -1,19 +1,21 @@
-// AI driver: follows the racing line using only the same controls a player has
-// (throttle/brake/steer). No rubber-banding: pace comes purely from skill traits.
+// AI driver: same controls as the player (throttle/brake/steer), same physics.
+// Racecraft = lane choice by cost + physically-based following distance.
+// No rubber-banding: pace is personality.pace x global difficulty, nothing else.
 
 export const PERSONALITIES = [
-  // pace: fraction of limit grip used; consistency: noise; aggression: overtake/defend; composure: pressure handling
-  { name: 'Mara Okonkwo',   team: 'Halcyon Racing',    color: 0x1f6feb, pace: 0.985, consistency: 0.95, aggression: 0.55, composure: 0.90, brakeLate: 0.6, style: 'Precise' },
-  { name: 'Dario Vell',     team: 'Ferroquin Motori',   color: 0xd7262e, pace: 0.990, consistency: 0.85, aggression: 0.90, composure: 0.60, brakeLate: 0.9, style: 'Aggressive' },
-  { name: 'Ines Kallström', team: 'Nordlys GP',         color: 0x2ec4b6, pace: 0.975, consistency: 0.97, aggression: 0.35, composure: 0.95, brakeLate: 0.4, style: 'Metronome' },
-  { name: 'Theo Marchetti', team: 'Vantage Corsa',      color: 0xf2a33a, pace: 0.970, consistency: 0.80, aggression: 0.75, composure: 0.50, brakeLate: 0.8, style: 'Hothead' },
-  { name: 'Yuki Arashiro',  team: 'Kaze Dynamics',      color: 0xffffff, pace: 0.980, consistency: 0.92, aggression: 0.50, composure: 0.80, brakeLate: 0.5, style: 'Tyre whisperer' },
-  { name: 'Sol Benítez',    team: 'Cobalt Autosport',   color: 0x7a3cff, pace: 0.960, consistency: 0.88, aggression: 0.65, composure: 0.70, brakeLate: 0.6, style: 'Opportunist' },
-  { name: 'Priya Raman',    team: 'Lumen Works',        color: 0xc8f031, pace: 0.965, consistency: 0.93, aggression: 0.40, composure: 0.85, brakeLate: 0.5, style: 'Strategist' },
-  { name: 'Lukas Brandt',   team: 'Eisen Motorsport',   color: 0x8a8f98, pace: 0.955, consistency: 0.90, aggression: 0.60, composure: 0.75, brakeLate: 0.55, style: 'Defender' },
-  { name: 'Céleste Roy',    team: 'Aurore Racing',      color: 0xff5fa2, pace: 0.968, consistency: 0.86, aggression: 0.70, composure: 0.65, brakeLate: 0.7, style: 'Late braker' },
-  { name: 'Kofi Mensah',    team: 'Sable Engineering',  color: 0x2b2b2b, pace: 0.950, consistency: 0.94, aggression: 0.45, composure: 0.88, brakeLate: 0.45, style: 'Rookie' },
-  { name: 'Ana Duarte',     team: 'Maré Racing',        color: 0x00a3ff, pace: 0.962, consistency: 0.89, aggression: 0.58, composure: 0.78, brakeLate: 0.6, style: 'Wet specialist', wetBonus: 0.03 },
+  // pace: fraction of the calibrated limit; consistency: noise; aggression: overtake/defend;
+  // composure: resistance to pressure mistakes
+  { name: 'Mara Okonkwo',   team: 'Halcyon Racing',    color: 0x1f6feb, pace: 1.000, consistency: 0.96, aggression: 0.55, composure: 0.92, style: 'Precise' },
+  { name: 'Dario Vell',     team: 'Ferroquin Motori',  color: 0xd7262e, pace: 0.996, consistency: 0.86, aggression: 0.92, composure: 0.55, style: 'Aggressive' },
+  { name: 'Ines Kallström', team: 'Nordlys GP',        color: 0x2ec4b6, pace: 0.990, consistency: 0.98, aggression: 0.35, composure: 0.95, style: 'Metronome' },
+  { name: 'Theo Marchetti', team: 'Vantage Corsa',     color: 0xf2a33a, pace: 0.986, consistency: 0.82, aggression: 0.80, composure: 0.45, style: 'Hothead' },
+  { name: 'Yuki Arashiro',  team: 'Kaze Dynamics',     color: 0xffffff, pace: 0.988, consistency: 0.93, aggression: 0.50, composure: 0.82, style: 'Tyre whisperer' },
+  { name: 'Sol Benítez',    team: 'Cobalt Autosport',  color: 0x7a3cff, pace: 0.978, consistency: 0.88, aggression: 0.70, composure: 0.70, style: 'Opportunist' },
+  { name: 'Priya Raman',    team: 'Lumen Works',       color: 0xc8f031, pace: 0.982, consistency: 0.94, aggression: 0.40, composure: 0.85, style: 'Strategist' },
+  { name: 'Lukas Brandt',   team: 'Eisen Motorsport',  color: 0x8a8f98, pace: 0.972, consistency: 0.90, aggression: 0.60, composure: 0.75, style: 'Defender' },
+  { name: 'Céleste Roy',    team: 'Aurore Racing',     color: 0xff5fa2, pace: 0.980, consistency: 0.86, aggression: 0.72, composure: 0.62, style: 'Late braker' },
+  { name: 'Kofi Mensah',    team: 'Sable Engineering', color: 0x3a3d44, pace: 0.966, consistency: 0.92, aggression: 0.45, composure: 0.88, style: 'Rookie' },
+  { name: 'Ana Duarte',     team: 'Maré Racing',       color: 0x00a3ff, pace: 0.975, consistency: 0.89, aggression: 0.58, composure: 0.78, style: 'Wet specialist', wetBonus: 0.03 },
 ];
 
 function rng(seed) {
@@ -21,103 +23,121 @@ function rng(seed) {
   return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 100000) / 100000; };
 }
 
+const CAR_W = 2.0;     // lateral clearance needed between car centres
+const DECEL = 26;      // m/s^2 the AI plans to brake at when following
+
 export class AIDriver {
-  constructor(car, track, line, profile, persona, seed = 1) {
+  /** @param difficulty global pace multiplier for the whole field (e.g. 0.93 easy .. 1.0 pro) */
+  constructor(car, track, line, profile, persona, seed = 1, difficulty = 1) {
     this.car = car; this.track = track; this.line = line; this.profile = profile;
-    this.p = persona; this.rand = rng(seed);
-    this.hint = -1;
-    this.latTarget = 0;   // extra lateral offset for overtaking/defending
-    this.lat = 0;
-    this.mistake = 0;     // seconds remaining of a mistake
-    this.mistakeKind = '';
-    this.pressure = 0;
-    this.noise = 0;
-    this.s = 0;
+    this.p = persona; this.rand = rng(seed); this.difficulty = difficulty;
+    this.hint = -1; this.s = 0;
+    this.lat = null;
+    this.mistake = 0; this.mistakeKind = '';
+    this.pressure = 0; this.noise = 0;
+    this.launchDelay = 0.08 + this.rand() * 0.3 * (1.2 - (persona.consistency ?? 0.9));
+    this.status = '';
   }
 
-  /** others: array of {car, s} for awareness. Returns input. */
-  update(dt, others = [], env = { wet: 0 }) {
-    const car = this.car, tr = this.track, p = this.p;
+  update(dt, others = [], env = { wet: 0 }, racing = true) {
+    const car = this.car, tr = this.track, p = this.p, line = this.line;
     const pr = tr.project(car.x, car.z, this.hint);
     this.hint = pr.i; this.s = pr.s;
-    const speed = car.speed;
+    const v = car.speed, L = tr.length;
+    const hw = tr.width / 2 - 1.3;
+    if (this.lat === null) this.lat = pr.lat;
 
-    // --- traffic awareness ---
-    let ahead = null, aheadGap = 1e9, behindGap = 1e9;
-    let sideBlock = 0;
+    // ---- nearby cars in track coordinates ----
+    const near = [];
     for (const o of others) {
       if (o.car === car) continue;
       let ds = o.s - pr.s;
-      if (ds > tr.length / 2) ds -= tr.length; else if (ds < -tr.length / 2) ds += tr.length;
-      const olat = tr.project(o.car.x, o.car.z, o.hint ?? -1).lat;
-      if (ds > 0 && ds < 60 && Math.abs(olat - pr.lat) < 6 && ds < aheadGap) { ahead = { ...o, lat: olat }; aheadGap = ds; }
-      if (ds < 0 && -ds < behindGap) behindGap = -ds;
-      if (Math.abs(ds) < 6) sideBlock = olat > pr.lat ? 1 : -1; // car alongside: +1 on our left
+      if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;
+      if (ds < -25 || ds > 120) continue;
+      const opr = tr.project(o.car.x, o.car.z, o.hint ?? -1);
+      near.push({ ds, lat: opr.lat, v: o.car.speed });
     }
-    // pressure builds when someone is close behind; composure resists it
-    const close = behindGap < 15 ? 1 - behindGap / 15 : 0;
-    this.pressure += ((close * (1 - p.composure)) - this.pressure) * Math.min(1, dt * 0.8);
 
-    // overtaking: move off-line when closing on a car ahead
-    const hw = tr.width / 2 - 1.8;
-    let wantLat = 0;
-    if (ahead && aheadGap < 35) {
-      const closing = speed - ahead.car.speed;
-      if (closing > -2 || p.aggression > 0.6) {
-        const side = ahead.lat > this.line.offset[pr.i] ? -1 : 1;
-        wantLat = side * 3.4 * (0.6 + p.aggression * 0.6);
+    // ---- pressure from a car close behind (composure resists it) ----
+    let behind = 0;
+    for (const o of near) if (o.ds < 0 && o.ds > -18) behind = Math.max(behind, 1 + o.ds / 18);
+    this.pressure += (behind * (1 - p.composure) - this.pressure) * Math.min(1, dt * 0.7);
+
+    // ---- lane choice by cost ----
+    const lookI = tr.idx(pr.i + Math.round((10 + v * 0.6) / tr.ds));
+    const ideal = line.offset[lookI];
+    let cornerK = 0;
+    for (let k = 0; k < 120; k += 10) cornerK = Math.max(cornerK, Math.abs(tr.curv[tr.idx(pr.i + Math.round(k / tr.ds))]));
+    const cornerW = Math.min(1, cornerK / 0.012);
+    let best = ideal, bestCost = Infinity;
+    for (let c = -hw; c <= hw + 1e-6; c += 0.75) {
+      let cost = Math.abs(c - ideal) * (0.12 + cornerW * 0.5) + Math.abs(c - this.lat) * 0.08;
+      for (const o of near) {
+        if (Math.abs(c - o.lat) >= CAR_W + 0.6) continue;
+        if (o.ds > -4 && o.ds < 7) cost += 50;              // alongside: never steer into them
+        else if (o.ds >= 7) {
+          const closing = v - o.v;
+          const reach = o.ds / Math.max(0.5, closing);       // seconds until we arrive
+          if (closing > -1 && reach < 4) cost += (6 + 6 * p.aggression) * (1 - reach / 4) + 2;
+          else if (o.ds < 25) cost += 1.5;
+        }
       }
+      if (cost < bestCost) { bestCost = cost; best = c; }
     }
-    if (sideBlock !== 0) wantLat = -sideBlock * 3.2; // give racing room
-    this.latTarget += (wantLat - this.latTarget) * Math.min(1, dt * 0.9);
+    if (this.mistake > 0 && this.mistakeKind === 'wide') best -= Math.sign(tr.curv[lookI] || 1) * 3;
+    best = Math.max(-hw, Math.min(hw, best));
+    const latRate = 2.2 + v * 0.03;
+    this.lat += Math.max(-latRate * dt, Math.min(latRate * dt, best - this.lat));
 
-    // --- mistakes under pressure (lock-up / run wide), driven by personality ---
+    // ---- mistakes under pressure ----
     if (this.mistake <= 0) {
-      const base = (1 - p.consistency) * 0.006 + this.pressure * 0.05;
-      if (this.rand() < base * dt * 60 * 0.02) {
-        this.mistake = 0.6 + this.rand() * 0.9;
-        this.mistakeKind = this.rand() < 0.5 ? 'lockup' : 'wide';
+      const chance = ((1 - p.consistency) * 0.02 + this.pressure * 0.25) * dt;
+      if (racing && this.rand() < chance) {
+        this.mistake = 0.8 + this.rand() * 0.8;
+        this.mistakeKind = this.rand() < 0.5 ? 'late' : 'wide';
       }
     } else this.mistake -= dt;
 
-    // --- steering: pure pursuit on (racing line + lateral offset) ---
-    const look = 9 + speed * 0.5;
+    // ---- steering: pure pursuit on (centreline + chosen lateral) ----
+    const look = 8 + v * 0.42;
     const li = tr.idx(pr.i + Math.round(look / tr.ds));
-    let offs = this.line.offset[li] + this.latTarget + (this.mistake > 0 && this.mistakeKind === 'wide' ? 3 : 0);
-    offs = Math.max(-hw, Math.min(hw, offs));
-    const tx = tr.x[li] + tr.nx[li] * offs, tz = tr.z[li] + tr.nz[li] * offs;
+    const tx = tr.x[li] + tr.nx[li] * this.lat, tz = tr.z[li] + tr.nz[li] * this.lat;
     const sinY = Math.sin(car.yaw), cosY = Math.cos(car.yaw);
     const dx = tx - car.x, dz = tz - car.z;
     const lx = dx * cosY - dz * sinY, lz = dx * sinY + dz * cosY;
     const alpha = Math.atan2(lx, Math.max(0.1, lz));
     const ld = Math.hypot(lx, lz);
-    let steerAng = Math.atan(2 * car.spec.wheelbase * Math.sin(alpha) / ld);
-    // damp yaw: counter rotation if yaw rate exceeds what path needs
     const kappa = 2 * Math.sin(alpha) / ld;
-    steerAng += (kappa * speed - car.r) * 0.08;
-    this.noise += ((this.rand() - 0.5) * (1 - p.consistency) * 0.08 - this.noise) * Math.min(1, dt * 3);
-    let steer = steerAng / car.spec.maxSteer + this.noise;
-    steer = Math.max(-1, Math.min(1, steer));
+    const steerAng = Math.atan(car.spec.wheelbase * kappa) + (kappa * v - car.r) * 0.06;
+    this.noise += ((this.rand() - 0.5) * (1 - p.consistency) * 0.06 - this.noise) * Math.min(1, dt * 3);
+    const steer = Math.max(-1, Math.min(1, steerAng / car.spec.maxSteer + this.noise));
 
-    // --- speed control from profile ---
-    const wetPen = env.wet ? env.wet * (0.42 - (p.wetBonus || 0) * 3) : 0;
-    const paceMul = p.pace * (1 - wetPen * 0.55) * (1 - this.pressure * 0.02);
-    const brakeLook = Math.round((4 + speed * 0.1 * (1 - p.brakeLate * 0.5)) / tr.ds);
+    // ---- target speed ----
+    const wetPen = env.wet ? env.wet * (0.40 - (p.wetBonus || 0) * 3) : 0;
+    let paceMul = p.pace * this.difficulty * (1 - wetPen * 0.55);
+    if (this.mistake > 0 && this.mistakeKind === 'late') paceMul *= 1.07;
+    paceMul *= 1 - Math.min(0.12, Math.abs(this.lat - ideal) * 0.012 * cornerW);
     let target = Infinity;
-    for (let k = 0; k <= brakeLook; k += 2) target = Math.min(target, this.profile[tr.idx(pr.i + k)]);
+    for (let k = 0; k <= 6; k++) target = Math.min(target, this.profile[tr.idx(pr.i + k)]);
     target *= paceMul;
-    // don't drive into the car ahead: if laterally overlapping, match its speed with a safety gap
-    if (ahead && aheadGap < 30) {
-      const overlap = Math.abs(ahead.lat - (pr.lat + (this.latTarget - (this.latTarget * 0)))) < 2.4 || Math.abs(ahead.lat - pr.lat) < 2.2;
-      if (overlap) target = Math.min(target, ahead.car.speed + Math.max(-4, (aheadGap - 7) * 0.45));
+    // follow: hold a safe gap behind any car in our lane (stopping-distance based)
+    this.status = '';
+    for (const o of near) {
+      if (o.ds <= 0) continue;
+      if (Math.abs(o.lat - this.lat) > CAR_W + 0.3 && Math.abs(o.lat - pr.lat) > CAR_W + 0.3) continue;
+      const gap = o.ds - (6 + v * 0.12);
+      const vSafe = gap >= 0 ? Math.sqrt(o.v * o.v + 2 * DECEL * gap) : Math.max(0, o.v + gap * 0.8);
+      if (vSafe < target) { target = vSafe; this.status = 'follow'; }
     }
+
     let throttle = 0, brake = 0;
-    const err = target - speed;
-    if (err > 0) throttle = Math.min(1, 0.4 + err * 0.5); else if (err < -0.6) brake = Math.min(1, -err * 0.22);
-    // traction management on exit: ease off when sliding
+    const err = target - v;
+    if (!racing) { throttle = 0.4; brake = 1; }
+    else if (err > 0) throttle = Math.min(1, 0.35 + err * 0.6);
+    else if (err < -0.4) brake = Math.min(1, -err * 0.28);
     const rearSlide = Math.max(car.wheels[2].slide, car.wheels[3].slide);
-    if (rearSlide > 0.8) throttle *= 0.6;
-    if (this.mistake > 0 && this.mistakeKind === 'lockup' && brake > 0.2) brake = 1;
+    throttle *= Math.max(0.2, Math.min(1, 1.6 - rearSlide));
+    if (racing && this.launchDelay > 0) { this.launchDelay -= dt; throttle = 0; brake = 1; }
     return { throttle, brake, steer };
   }
 }

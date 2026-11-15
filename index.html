@@ -73,6 +73,7 @@
   .seg button.sel { background: var(--accent); }
   #go { margin-top: 28px; padding: 14px 44px; font-size: 26px; font-weight: 800; background: var(--accent); color: white; border: 0; border-radius: 8px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.05em; }
   #go:hover { filter: brightness(1.1); }
+  .assist-note { color: var(--muted); font-size: 13px; margin-top: 2px; }
   .keys { color: var(--muted); font-size: 13px; margin-top: 18px; line-height: 1.7; }
   kbd { background: rgba(255,255,255,0.1); border-radius: 3px; padding: 1px 6px; font-family: inherit; color: var(--text); }
   #overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,7,10,0.7); }
@@ -109,7 +110,7 @@
   </div>
   <div id="msg"></div>
   <div id="toast"></div>
-  <div id="help">Arrows/WASD drive · Q/E shift (manual) · C camera · R restart · Backspace reset car · T/Y TC/ABS · Esc pause</div>
+  <div id="help">Arrows/WASD drive · Q/E shift (manual) · C camera · R restart · Backspace reset car · L racing line · T/Y TC/ABS · Esc pause</div>
 </div>
 <div id="menu">
   <div class="wrap">
@@ -123,9 +124,12 @@
     <div class="seg" id="weather"><button data-v="dry" class="sel">Dry</button><button data-v="rain">Rain</button></div>
     <h2>Assists</h2>
     <div class="seg" id="assist"><button data-v="full" class="sel">Full</button><button data-v="medium">Medium</button><button data-v="off">Off (sim)</button></div>
+    <div class="assist-note" id="assistNote"></div>
+    <h2>Opponents</h2>
+    <div class="seg" id="difficulty"><button data-v="easy">Easy</button><button data-v="medium" class="sel">Medium</button><button data-v="hard">Hard</button><button data-v="pro">Pro</button></div>
     <div><button id="go">RACE</button></div>
     <div class="keys">
-      <kbd>↑</kbd>/<kbd>W</kbd> throttle · <kbd>↓</kbd>/<kbd>S</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>C</kbd> camera · <kbd>R</kbd> instant restart · <kbd>Esc</kbd> pause<br>
+      <kbd>↑</kbd>/<kbd>W</kbd> throttle · <kbd>↓</kbd>/<kbd>S</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>C</kbd> camera · <kbd>L</kbd> racing line · <kbd>R</kbd> instant restart · <kbd>Esc</kbd> pause<br>
       Gamepad: left stick steer, RT/LT throttle/brake, LB/RB shift, Y camera, Start pause.
     </div>
   </div>

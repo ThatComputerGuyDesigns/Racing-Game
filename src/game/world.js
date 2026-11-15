@@ -34,7 +34,7 @@ export class World {
     const sky = new Sky(); sky.scale.setScalar(10000);
     const u = sky.material.uniforms;
     const wet = this.weather.wet;
-    u.turbidity.value = 4 + wet * 12; u.rayleigh.value = 1.2 + wet * 2; u.mieCoefficient.value = 0.004 + wet * 0.02; u.mieDirectionalG.value = 0.85;
+    u.turbidity.value = 2.5 + wet * 12; u.rayleigh.value = 2.4 + wet * 1; u.mieCoefficient.value = 0.003 + wet * 0.02; u.mieDirectionalG.value = 0.85;
     const elev = THREE.MathUtils.degToRad(this.weather.sunElev ?? 32), az = THREE.MathUtils.degToRad(this.weather.sunAz ?? 140);
     const sunDir = new THREE.Vector3().setFromSphericalCoords(1, Math.PI / 2 - elev, az);
     u.sunPosition.value.copy(sunDir);
@@ -51,8 +51,8 @@ export class World {
     this.envMap = pm.fromScene(envScene, 0.02).texture;
     this.scene.environment = this.envMap;
     this.scene.environmentIntensity = 1 - wet * 0.4;
-    const fogCol = new THREE.Color(wet > 0.2 ? 0x8d949c : 0xb9cbe0);
-    this.scene.fog = new THREE.Fog(fogCol, 500 - wet * 300, 4500 - wet * 3300);
+    const fogCol = new THREE.Color(wet > 0.2 ? 0x8d949c : 0x9fb8d6);
+    this.scene.fog = new THREE.Fog(fogCol, 700 - wet * 450, 5500 - wet * 4200);
 
     const sun = new THREE.DirectionalLight(0xfff1dc, 3.2 * (1 - wet * 0.65));
     sun.position.copy(sunDir).multiplyScalar(300);

@@ -15,4 +15,4 @@ export function runRace(trackId, laps = 2, wet = 0) {
   const fin = ses.entries.filter(e => e.finished).length;
   return { track: trackId, finished: fin, of: ses.entries.length, impacts, bigImpacts, winner: ses.order[0].name, order: ses.order.map(e => e.name.split(' ')[1]).join(' ') };
 }
-if (process.argv[1].endsWith('race.mjs')) for (const t of (process.argv[2] ? [process.argv[2]] : ['spa', 'monza', 'suzuka'])) console.log(runRace(t));
+if (process.argv[1]?.endsWith('race.mjs')) for (const t of (process.argv[2] ? [process.argv[2]] : ['spa', 'monza', 'suzuka'])) console.log(runRace(t));
