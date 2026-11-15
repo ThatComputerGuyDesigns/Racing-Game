@@ -16,7 +16,8 @@ const params = new URLSearchParams(location.search);
 // ---------- renderer ----------
 const canvas = $('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-const QUALITY = params.get('quality') || localStorage.getItem('vc-quality') || 'high';
+let savedQ = null; try { savedQ = localStorage.getItem('vc-quality'); } catch { /* storage blocked */ }
+const QUALITY = params.get('quality') || savedQ || 'high';
 const LOW = QUALITY === 'low';
 renderer.setPixelRatio(LOW ? 0.6 : Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
