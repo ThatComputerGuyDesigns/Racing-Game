@@ -1,0 +1,19 @@
+{
+  "name": "velocity-circuit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Velocity Circuit - an original sim-cade racing game (Three.js, procedural)",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "start": "node tools/build.mjs && node tools/serve.mjs",
+    "test": "node test/run.mjs",
+    "shot": "node tools/screenshot.mjs"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

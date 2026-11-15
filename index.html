@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velocity Circuit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090c; --panel: rgba(10, 13, 18, 0.72); --line: rgba(255,255,255,0.12);
+    --text: #f1f3f5; --muted: #9aa4af; --accent: #ff3b2f; --good: #3fd17a; --best: #b86bff; --warn: #f2c94c;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #07090c; } }
+  :root[data-theme="dark"] { --bg: #07090c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: Barlow, system-ui, sans-serif; user-select: none; }
+  canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .cond { font-family: 'Barlow Condensed', Barlow, sans-serif; letter-spacing: 0.02em; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(6px); }
+  #speedo { position: absolute; right: 24px; bottom: 22px; width: 250px; padding: 12px 16px 14px; }
+  #speed { font-size: 64px; font-weight: 800; line-height: 0.9; text-align: right; }
+  #speed small { font-size: 16px; color: var(--muted); margin-left: 4px; font-weight: 500; }
+  #gear { position: absolute; left: 16px; top: 8px; font-size: 54px; font-weight: 800; color: var(--accent); }
+  #rpmbar { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; margin-top: 10px; overflow: hidden; }
+  #rpmfill { height: 100%; width: 0; background: linear-gradient(90deg, #3fd17a 0 60%, #f2c94c 60% 82%, #ff3b2f 82%); }
+  #shift { display: flex; gap: 4px; justify-content: center; margin-top: 8px; }
+  #shift i { width: 14px; height: 6px; border-radius: 2px; background: rgba(255,255,255,0.1); }
+  #flags { display: flex; gap: 6px; margin-top: 8px; font-size: 12px; font-weight: 700; }
+  #flags span { padding: 1px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--muted); }
+  #flags span.on { background: var(--warn); color: #111; }
+  #timing { position: absolute; right: 24px; top: 20px; min-width: 230px; padding: 10px 14px; font-size: 15px; }
+  #timing .row { display: flex; justify-content: space-between; gap: 16px; }
+  #timing .big { font-size: 30px; font-weight: 700; }
+  #delta { font-size: 18px; font-weight: 700; text-align: right; }
+  .neg { color: var(--good); } .pos { color: var(--accent); } .pb { color: var(--best); }
+  #posbox { position: absolute; left: 24px; top: 20px; padding: 8px 14px; }
+  #pos { font-size: 44px; font-weight: 800; line-height: 1; }
+  #pos small { font-size: 18px; color: var(--muted); }
+  #lapc { font-size: 16px; color: var(--muted); }
+  #board { position: absolute; left: 24px; top: 108px; width: 230px; padding: 6px 0; font-size: 14px; }
+  #board div { display: flex; gap: 8px; padding: 2px 10px; align-items: center; }
+  #board div.me { background: rgba(255,59,47,0.25); }
+  #board b { width: 18px; text-align: right; color: var(--muted); }
+  #board i { width: 4px; height: 14px; border-radius: 1px; }
+  #board span { flex: 1; white-space: nowrap; overflow: hidden; }
+  #board em { font-style: normal; color: var(--muted); font-size: 12px; }
+  #tyres { position: absolute; left: 24px; bottom: 22px; padding: 10px 12px; display: grid; grid-template-columns: 40px 40px; gap: 6px 10px; font-size: 11px; text-align: center; }
+  #tyres .t { height: 50px; border-radius: 6px; display: flex; flex-direction: column; justify-content: center; font-weight: 700; color: #111; }
+  #tyres .lbl { grid-column: span 2; color: var(--muted); font-size: 12px; }
+  #minimap { position: absolute; right: 24px; top: 180px; width: 200px; height: 200px; opacity: 0.9; }
+  #msg { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 52px; font-weight: 800; text-shadow: 0 4px 24px rgba(0,0,0,0.6); text-align: center; }
+  #toast { position: absolute; left: 50%; top: 34%; transform: translateX(-50%); font-size: 22px; font-weight: 700; opacity: 0; transition: opacity 0.4s; text-shadow: 0 2px 12px #000; }
+  #help { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 12px; color: var(--muted); }
+  /* menu */
+  #menu { position: fixed; inset: 0; overflow-y: auto; background: radial-gradient(1200px 600px at 70% 10%, rgba(255,59,47,0.18), transparent), linear-gradient(180deg, rgba(7,9,12,0.55), rgba(7,9,12,0.95)); padding: 40px 16px; }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  h1 { font-size: clamp(44px, 8vw, 84px); margin: 0; line-height: 0.9; font-weight: 800; font-style: italic; }
+  h1 span { color: var(--accent); }
+  .tag { color: var(--muted); margin: 10px 0 28px; font-size: 16px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 26px 0 10px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .card { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); cursor: pointer; transition: border-color .15s, background .15s; }
+  .card:hover { border-color: rgba(255,255,255,0.35); }
+  .card.sel { border-color: var(--accent); background: rgba(255,59,47,0.1); }
+  .card h3 { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
+  .card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.35; }
+  .card canvas { width: 100%; height: 90px; display: block; margin-bottom: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-right: 10px; margin-bottom: 8px; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  .seg button.sel { background: var(--accent); }
+  #go { margin-top: 28px; padding: 14px 44px; font-size: 26px; font-weight: 800; background: var(--accent); color: white; border: 0; border-radius: 8px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.05em; }
+  #go:hover { filter: brightness(1.1); }
+  .keys { color: var(--muted); font-size: 13px; margin-top: 18px; line-height: 1.7; }
+  kbd { background: rgba(255,255,255,0.1); border-radius: 3px; padding: 1px 6px; font-family: inherit; color: var(--text); }
+  #overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,7,10,0.7); }
+  #overlay .box { width: min(560px, calc(100% - 32px)); padding: 24px; }
+  #overlay h2 { margin-top: 0; color: var(--text); font-size: 30px; letter-spacing: 0; text-transform: none; font-weight: 800; }
+  #results div { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  #results b { width: 26px; } #results span { flex: 1; } #results em { color: var(--muted); font-style: normal; }
+  .btns { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .btns button { flex: 1; padding: 10px; font: inherit; font-weight: 700; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+  .btns button.primary { background: var(--accent); border-color: var(--accent); }
+  #loading { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; font-size: 28px; background: var(--bg); }
+  @media (max-width: 700px) { #board, #minimap { display: none; } #speedo { width: 180px; right: 12px; } #speed { font-size: 44px; } #timing { right: 12px; min-width: 0; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud" class="cond">
+  <div id="posbox" class="panel"><div id="pos">P1<small>/1</small></div><div id="lapc">LAP 1</div></div>
+  <div id="board" class="panel"></div>
+  <div id="timing" class="panel">
+    <div class="big" id="cur">0:00.000</div>
+    <div id="delta"></div>
+    <div class="row"><span>LAST</span><span id="last">--</span></div>
+    <div class="row"><span>BEST</span><span id="best">--</span></div>
+  </div>
+  <canvas id="minimap" width="400" height="400"></canvas>
+  <div id="tyres" class="panel"></div>
+  <div id="speedo" class="panel">
+    <div id="gear">N</div>
+    <div id="speed">0<small>KM/H</small></div>
+    <div id="rpmbar"><div id="rpmfill"></div></div>
+    <div id="shift"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="flags"><span id="fTC">TC</span><span id="fABS">ABS</span><span id="fSTB">STAB</span><span id="fGB">AUTO</span></div>
+  </div>
+  <div id="msg"></div>
+  <div id="toast"></div>
+  <div id="help">Arrows/WASD drive · Q/E shift (manual) · C camera · R restart · Backspace reset car · T/Y TC/ABS · Esc pause</div>
+</div>
+<div id="menu">
+  <div class="wrap">
+    <h1 class="cond">VELOCITY <span>CIRCUIT</span></h1>
+    <div class="tag">Sim-cade open-wheel racing. Pick a circuit and go.</div>
+    <h2>Circuit</h2>
+    <div class="grid" id="tracks"></div>
+    <h2>Session</h2>
+    <div class="seg" id="mode"><button data-v="race" class="sel">Quick race</button><button data-v="practice">Hot lap</button></div>
+    <div class="seg" id="laps"><button data-v="3">3 laps</button><button data-v="5" class="sel">5 laps</button><button data-v="10">10 laps</button></div>
+    <div class="seg" id="weather"><button data-v="dry" class="sel">Dry</button><button data-v="rain">Rain</button></div>
+    <h2>Assists</h2>
+    <div class="seg" id="assist"><button data-v="full" class="sel">Full</button><button data-v="medium">Medium</button><button data-v="off">Off (sim)</button></div>
+    <div><button id="go">RACE</button></div>
+    <div class="keys">
+      <kbd>↑</kbd>/<kbd>W</kbd> throttle · <kbd>↓</kbd>/<kbd>S</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>C</kbd> camera · <kbd>R</kbd> instant restart · <kbd>Esc</kbd> pause<br>
+      Gamepad: left stick steer, RT/LT throttle/brake, LB/RB shift, Y camera, Start pause.
+    </div>
+  </div>
+</div>
+<div id="overlay"><div class="box panel"><h2 id="ovTitle">Paused</h2><div id="results"></div>
+  <div class="btns"><button class="primary" id="bRestart">Restart (R)</button><button id="bResume">Resume (Esc)</button><button id="bMenu">Menu (M)</button></div></div></div>
+<div id="loading" class="cond">Building circuit…</div>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
