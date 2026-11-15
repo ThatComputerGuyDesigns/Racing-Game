@@ -10,7 +10,8 @@ import { Particles, SkidMarks, makeComposer } from './fx.js';
 import { Input } from './input.js';
 import { Audio } from './audio.js';
 import { ASSIST_PRESETS, DIFFICULTY } from '../sim/assists.js';
-import { RaceLine, brakeAssist } from './raceline.js';
+import { RaceLine } from './raceline.js';
+import { DriveAssist } from '../sim/drivingassist.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -50,6 +51,7 @@ const cfg = {
 };
 let lineMode = null; // null = follow assist preset
 let raceLine = null;
+let driveAssist = null;
 const ASSISTS = ASSIST_PRESETS;
 
 function drawTrackPreview(cv, tr, w, h, color = '#f1f3f5', lw = 3) {
@@ -86,7 +88,7 @@ function buildMenu() {
       b.onclick = () => { cfg[key] = key === 'laps' ? +b.dataset.v : b.dataset.v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b)); $('go').textContent = cfg.mode === 'race' ? 'RACE' : 'DRIVE'; };
     });
   }
-  const notes = { full: 'Racing line, braking assist, grip-limited steering, TC, ABS, stability, auto gears.', medium: 'Racing line in corners, TC, ABS, light stability, auto gears. You brake.', off: 'No line, no TC/ABS, manual gears (Q/E). For wheel or pad.' };
+  const notes = { full: 'Easiest. A co-driver steers the racing line and brakes for corners. Just hold throttle; steer to overtake.', medium: 'You steer. Auto braking for corners, edge protection, stability control, racing line.', off: 'Simulation. No help, manual gears (Q/E). For wheel or pad.' };
   const setNote = () => { $('assistNote').textContent = notes[cfg.assist]; };
   setNote(); $('assist').addEventListener('click', () => setTimeout(setNote));
   $('go').onclick = () => { audio.start(); startSession(); };
@@ -151,6 +153,7 @@ function newSession() {
     const m = buildCar(color, accent, COMPOUNDS[e.car.compound].color);
     scene.add(m); meshes.set(e, m);
   }
+  driveAssist = new DriveAssist(session, player, cfg.assist);
   raceLine?.dispose(scene);
   raceLine = new RaceLine(scene, tr, session.line, session.profile, player.car.spec);
   lineMode = null;
@@ -379,6 +382,7 @@ function frame(now) {
 }
 function tick(dt, now) {
   if (state === 'playing' || state === 'results') {
+    input.speed = player ? player.car.speed : 0;
     const inp = input.update(dt);
     if (input.hit('Escape')) pause(true);
     if (input.hit('KeyR')) { newSession(); return; }
@@ -393,7 +397,7 @@ function tick(dt, now) {
       toast('Racing line: ' + { full: 'full', corners: 'corners only', off: 'off' }[lineMode]);
     }
     let pIn = inp;
-    if (player.car.assists.brakeAssist) pIn = brakeAssist(session.track, session.profile, player.s, player.car.speed, pIn);
+    pIn = driveAssist.apply(dt, pIn, session.entries.map(e => ({ car: e.car, s: e.s, hint: e.hint })), session.state === 'running');
     if (autopilot) pIn = autopilot.update(dt, session.entries.map(e => ({ car: e.car, s: e.s, hint: e.hint })), session.env);
     if (state === 'results' || player.finished) pIn = { throttle: 0, brake: 0.4, steer: 0 };
     session.update(dt, pIn);

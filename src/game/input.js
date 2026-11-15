@@ -1,10 +1,12 @@
 // Keyboard + gamepad input with smoothing so keyboard players get progressive steering.
 
 /** Pure keyboard filter (shared with the headless keyboard-bot test). */
-export function keyboardFilter(st, keys, dt) {
+export function keyboardFilter(st, keys, dt, speed = 0) {
   const target = (keys.left ? 1 : 0) - (keys.right ? 1 : 0);
-  // ramp in quickly, snap back faster (self-centering), reverse fastest
-  const rate = target === 0 ? 8 : (st.steer !== 0 && Math.sign(target) !== Math.sign(st.steer) ? 11 : 4.5);
+  // ramp-in slows with speed: a tap at 300 km/h is a small correction, not full lock.
+  // Centering stays fast so releasing a key settles the car immediately.
+  const inRate = Math.max(1.1, 4.5 / (1 + (speed / 28) ** 2));
+  const rate = target === 0 ? 8 : (st.steer !== 0 && Math.sign(target) !== Math.sign(st.steer) ? Math.max(inRate * 2, 3) : inRate);
   const d = target - st.steer;
   st.steer += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
   st.throttle += ((keys.up ? 1 : 0) - st.throttle) * Math.min(1, dt * 12);
@@ -40,7 +42,7 @@ export class Input {
     const k = this.keys;
     const left = k.has('ArrowLeft') || k.has('KeyA'), right = k.has('ArrowRight') || k.has('KeyD');
     const up = k.has('ArrowUp') || k.has('KeyW'), down = k.has('ArrowDown') || k.has('KeyS') || k.has('Space');
-    keyboardFilter(this, { left, right, up, down }, dt);
+    keyboardFilter(this, { left, right, up, down }, dt, this.speed || 0);
     let shiftUp = this.hit('KeyE'), shiftDown = this.hit('KeyQ');
 
     const pad = this._pad();

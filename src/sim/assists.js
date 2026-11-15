@@ -2,7 +2,7 @@
 // steerAssist 1.0 = full lock always equals peak front grip for the current speed.
 export const ASSIST_PRESETS = {
   full:   { abs: true, tc: true, stability: 0.6, steerAssist: 1.0, autoGear: true, brakeAssist: true, line: 'full' },
-  medium: { abs: true, tc: true, stability: 0.3, steerAssist: 0.8, autoGear: true, brakeAssist: false, line: 'corners' },
+  medium: { abs: true, tc: true, stability: 0.45, steerAssist: 0.9, autoGear: true, brakeAssist: false, line: 'full' },
   off:    { abs: false, tc: false, stability: 0, steerAssist: 0.5, autoGear: false, brakeAssist: false, line: 'off' },
 };
 export const DIFFICULTY = { easy: 0.90, medium: 0.945, hard: 0.98, pro: 1.0 };

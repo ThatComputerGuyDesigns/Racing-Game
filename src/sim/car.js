@@ -146,16 +146,40 @@ export class Car {
     const aLat = muE * (G + kD * vv * vv);
     const gripLock = Math.min(s.maxSteer, Math.atan(s.wheelbase * aLat / (vv * vv)) + s.alphaPeak * 0.9);
     const lock = s.maxSteer + (gripLock - s.maxSteer) * assistAmt;
+    this.lastLock = lock;
     let targetSteer = steerIn * lock;
+    // Yaw-rate steering (assisted): input requests a turn rate up to the grip limit; the
+    // assist picks the wheel angle (feed-forward + yaw feedback), so taps never overshoot.
+    const rMax = aLat / vv;
+    this.lastRMax = rMax;
+    if (assistAmt > 0 && speed > 3) {
+      const rDes = steerIn * rMax;
+      const ff = Math.atan(s.wheelbase * rDes / vv) + Math.sign(rDes) * Math.min(1, Math.abs(rDes) / rMax) * s.alphaPeak * 0.75;
+      const fb = (rDes - this.r) * 0.2;
+      const yawSteer = Math.max(-gripLock - 0.04, Math.min(gripLock + 0.04, ff + fb));
+      const blend = Math.min(1, assistAmt) * Math.min(1, (speed - 3) / 8);
+      targetSteer = targetSteer + (yawSteer - targetSteer) * blend;
+    }
     if (A.stability > 0 && speed > 5) {
       // body slip angle; help the driver countersteer when the rear steps out
+      // v > 0 = sliding to the left relative to heading -> steer left (towards the slide)
       const beta = Math.atan2(v, Math.abs(u));
-      targetSteer += -beta * 0.9 * A.stability;
+      targetSteer += beta * 0.9 * A.stability;
       // yaw damping: resist yaw rate beyond what the path needs
       const rNeed = aLat / vv;
       if (Math.abs(this.r) > rNeed * 1.05) targetSteer -= Math.sign(this.r) * (Math.abs(this.r) - rNeed * 1.05) * 0.25 * A.stability;
     }
     targetSteer = Math.max(-s.maxSteer, Math.min(s.maxSteer, targetSteer));
+    // ESC: when the car rotates faster than grip allows or the body slip grows, relieve rear
+    // braking and cut drive (only with the stability assist on)
+    let esc = 0;
+    if (A.stability > 0 && speed > 6) {
+      const beta = Math.atan2(v, Math.abs(u));
+      esc = Math.min(1, Math.max(0, (Math.abs(this.r) - rMax * 1.1) / rMax) + Math.max(0, (Math.abs(beta) - 0.05) * 6));
+      esc *= Math.min(1, A.stability * 2);
+      throttle *= 1 - esc * 0.85;
+    }
+    this.esc = esc;
     const steerRate = 4.5; // rad/s at the wheel (physical rack speed)
     const dS = targetSteer - this.steerAngle;
     this.steerAngle += Math.max(-steerRate * dt, Math.min(steerRate * dt, dS));
@@ -250,7 +274,7 @@ export class Car {
       // longitudinal request
       let fxReq = 0;
       if (!w.front) fxReq += driveForce / 2;
-      const bshare = w.front ? s.brakeBias / 2 : (1 - s.brakeBias) / 2;
+      const bshare = w.front ? s.brakeBias / 2 : (1 - s.brakeBias) / 2 * (1 - esc * 0.85);
       let bReq = (this.reverse ? 0 : brake) * s.brakeForce * brakeMul * bshare;
       if (A.abs) {
         // cornering ABS: leave the tyre the lateral grip it is using (prevents trail-brake spins)

@@ -29,7 +29,7 @@ export function keyboardLap(trackId, preset = 'full', laps = 2) {
     let target = Infinity;
     for (let k = 0; k < 8; k++) target = Math.min(target, ses.profile[tr.idx(pr.i + k)]);
     const keys = { left: ang > 0.02, right: ang < -0.02, up: c.speed < target * 0.93, down: c.speed > target * 0.97 + 1.5 };
-    keyboardFilter(st, keys, 1 / 60);
+    keyboardFilter(st, keys, 1 / 60, e.car.speed);
     ses.update(1 / 60, { ...st });
     if (c.offTrack >= 2) off++; n++;
   }

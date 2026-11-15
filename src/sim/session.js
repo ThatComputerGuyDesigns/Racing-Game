@@ -96,8 +96,10 @@ export class Session {
     this.time += dt;
     const others = this.entries.map(e => ({ car: e.car, s: e.s, hint: e.hint }));
     const h = 1 / 240;
-    let steps = Math.round(dt / h);
-    if (steps < 1) steps = 1;
+    // fixed 240 Hz physics with an accumulator: identical behaviour at 30, 60 or 144 fps
+    this._acc = (this._acc || 0) + dt;
+    let steps = Math.min(48, Math.floor(this._acc / h + 1e-9));
+    this._acc -= steps * h;
     // AI decisions at frame rate, physics at 240 Hz
     const inputs = this.entries.map(e => {
       if (e.finished && e.ai == null) return { throttle: 0, brake: 0.3, steer: 0 };

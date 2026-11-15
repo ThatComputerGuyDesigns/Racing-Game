@@ -3,6 +3,7 @@ import { runLapSim } from './lapsim.mjs';
 import { skidpad } from './skidpad.mjs';
 import { runRace } from './race.mjs';
 import { keyboardLap } from './keyboardbot.mjs';
+import { humanLap } from './humanbot.mjs';
 let fail = 0;
 const check = (ok, msg) => { console.log((ok ? 'PASS ' : 'FAIL ') + msg); if (!ok) fail++; };
 // 1. skidpad: limit lateral grip in a believable sim-cade band, rising with downforce
@@ -20,6 +21,11 @@ for (const [id, [lo, hi]] of Object.entries(expect)) {
 for (const [t, preset] of [['spa', 'full'], ['suzuka', 'full'], ['silverstone', 'medium']]) {
   const r = keyboardLap(t, preset, 2);
   check(r.laps.length === 2 && r.offPct < 3 && r.walls === 0, `keyboard ${preset} @ ${r.track}: ${r.laps.join(' / ')}s, off ${r.offPct}%`);
+}
+// 3b. human-like drivers on Full assists (late reactions, key taps, braking errors, or no steering at all)
+for (const [t, style] of [['spa', 'throttle'], ['suzuka', 'sloppy'], ['imola', 'sloppy'], ['monza', 'sloppy']]) {
+  const r = humanLap(t, 'full', style, 2);
+  check(r.laps.length === 2 && r.offPct < 3 && r.walls === 0, `human(${style}) on Full @ ${r.track}: ${r.laps.join(' / ')}s, off ${r.offPct}%`);
 }
 // 4. full-field races: everyone finishes, racing stays clean
 for (const t of ['monza', 'spa']) {
