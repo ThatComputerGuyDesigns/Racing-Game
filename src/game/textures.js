@@ -93,3 +93,38 @@ export function softDot() {
   g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
 }
+
+export function fenceTexture() {
+  const [c, g] = canvas(128, 128);
+  g.clearRect(0, 0, 128, 128); g.strokeStyle = '#c9ccd1'; g.lineWidth = 3;
+  for (let i = -128; i < 256; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 128, 128); g.stroke(); g.beginPath(); g.moveTo(i + 128, 0); g.lineTo(i, 128); g.stroke(); }
+  g.fillStyle = '#8a8d92'; g.fillRect(0, 0, 6, 128); g.fillRect(0, 0, 128, 4);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+export function bannerTexture(seed) {
+  const names = ['VELOCITY', 'HALCYON ENERGY', 'FERROQUIN', 'NORDLYS', 'KAZE TELECOM', 'LUMEN', 'COBALT BANK', 'AURORE'];
+  const cols = ['#d7262e', '#1f6feb', '#14161a', '#2ec4b6', '#f2a33a', '#7a3cff'];
+  const k = Math.floor(seed * 97) % names.length;
+  const [c, g] = canvas(1024, 128);
+  g.fillStyle = cols[k % cols.length]; g.fillRect(0, 0, 1024, 128);
+  g.fillStyle = '#fff'; g.font = 'italic 900 84px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(names[k], 512, 68);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+export function asphaltNormal() {
+  // height noise -> tangent-space normal map (aggregate texture catches the sun)
+  const W = 256, [c, g] = canvas(W, W), r = rand(3);
+  const hgt = new Float32Array(W * W);
+  for (let i = 0; i < W * W; i++) hgt[i] = r();
+  for (let pass = 0; pass < 1; pass++) for (let i = 0; i < W * W; i++) hgt[i] = (hgt[i] + hgt[(i + 1) % (W * W)] + hgt[(i + W) % (W * W)]) / 3;
+  const img = g.createImageData(W, W);
+  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, dx = hgt[y * W + (x + 1) % W] - hgt[i], dy = hgt[((y + 1) % W) * W + x] - hgt[i];
+    const nx = -dx * 3, ny = -dy * 3, nz = 1, l = Math.hypot(nx, ny, nz);
+    img.data.set([(nx / l * 0.5 + 0.5) * 255, (ny / l * 0.5 + 0.5) * 255, (nz / l * 0.5 + 0.5) * 255, 255], i * 4);
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 40); return t;
+}

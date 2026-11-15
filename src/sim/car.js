@@ -368,7 +368,7 @@ export class Car {
     w.temp += (heat - cool) * dt;
     // wear grows with sliding energy and temperature above window
     const over = Math.max(0, w.temp - comp.optT - comp.window * 0.6) * 0.02;
-    w.wear = Math.min(1, w.wear + (w.slipPower * 0.0000000095 + over * 0.0000012 * speed) * comp.wear * (env.wearMul ?? 1) * dt);
+    w.wear = Math.min(1, w.wear + (w.slipPower * 0.0000000095 + over * 0.0000012 * speed) * comp.wear * (env.wearMul ?? 1) * (this.setup.wearMul ?? 1) * dt);
   }
 
   /** Fixed-step integration helper: splits frameDt into 1/240 substeps. */

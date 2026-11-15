@@ -79,8 +79,24 @@
   #overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,7,10,0.7); }
   #overlay .box { width: min(560px, calc(100% - 32px)); padding: 24px; }
   #overlay h2 { margin-top: 0; color: var(--text); font-size: 30px; letter-spacing: 0; text-transform: none; font-weight: 800; }
-  #results div { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); }
-  #results b { width: 26px; } #results span { flex: 1; } #results em { color: var(--muted); font-style: normal; }
+  .tbl div { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .tbl b { width: 26px; } .tbl span { flex: 1; } .tbl em { color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+  .tbl .me { color: var(--accent); font-weight: 700; } .tbl .rv { color: var(--warn); }
+  #overlay .box { max-height: calc(100% - 32px); overflow-y: auto; }
+  .note { color: var(--muted); font-size: 14px; margin: 8px 0; line-height: 1.45; }
+  .upg { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: center; }
+  .upg small { color: var(--muted); grid-column: 1; } .upg .pips { letter-spacing: 3px; color: var(--accent); }
+  .upg button { grid-row: span 2; padding: 8px 12px; font: inherit; font-weight: 700; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+  .upg button:disabled { opacity: 0.4; cursor: default; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); font-size: 12px; margin-right: 6px; }
+  #pitbox, #wxbox { position: absolute; right: 24px; bottom: 150px; padding: 6px 12px; font-size: 15px; display: none; }
+  #wxbox { bottom: 192px; }
+  #prompt { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); padding: 12px 20px; font-size: 20px; display: none; text-align: center; }
+  #prompt small { display: block; font-size: 14px; color: var(--muted); }
+  .career { margin-bottom: 8px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-color: var(--accent); background: rgba(255,59,47,0.08); }
+  .career div { flex: 1; min-width: 200px; } .career h3 { font-size: 28px; }
+  .career button { padding: 12px 26px; font: inherit; font-size: 20px; font-weight: 800; background: var(--accent); color: #fff; border: 0; border-radius: 8px; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; }
+  .career button.sec { background: transparent; border: 1px solid var(--line); font-size: 15px; padding: 8px 14px; }
   .btns { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .btns button { flex: 1; padding: 10px; font: inherit; font-weight: 700; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
   .btns button.primary { background: var(--accent); border-color: var(--accent); }
@@ -108,20 +124,24 @@
     <div id="shift"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div id="flags"><span id="fTC">TC</span><span id="fABS">ABS</span><span id="fSTB">STAB</span><span id="fGB">AUTO</span></div>
   </div>
+  <div id="pitbox" class="panel"></div>
+  <div id="wxbox" class="panel"></div>
+  <div id="prompt" class="panel"></div>
   <div id="msg"></div>
   <div id="toast"></div>
-  <div id="help">Arrows/WASD drive · Q/E shift (manual) · C camera · R restart · Backspace reset car · L racing line · T/Y TC/ABS · Esc pause</div>
+  <div id="help">Arrows/WASD drive · Q/E shift (manual) · C camera · R restart · Backspace reset car · L racing line · P pit · 1-4 tyre · T/Y TC/ABS · Esc pause</div>
 </div>
 <div id="menu">
   <div class="wrap">
     <h1 class="cond">VELOCITY <span>CIRCUIT</span></h1>
-    <div class="tag">Sim-cade open-wheel racing. Pick a circuit and go.</div>
+    <div class="tag">Sim-cade open-wheel racing. Start a career, or pick a circuit and go.</div>
+    <div id="careerCard" class="card career"></div>
     <h2>Circuit</h2>
     <div class="grid" id="tracks"></div>
     <h2>Session</h2>
-    <div class="seg" id="mode"><button data-v="race" class="sel">Quick race</button><button data-v="practice">Hot lap</button></div>
+    <div class="seg" id="mode"><button data-v="weekend">Race weekend</button><button data-v="race" class="sel">Quick race</button><button data-v="practice">Hot lap</button></div>
     <div class="seg" id="laps"><button data-v="3">3 laps</button><button data-v="5" class="sel">5 laps</button><button data-v="10">10 laps</button></div>
-    <div class="seg" id="weather"><button data-v="dry" class="sel">Dry</button><button data-v="rain">Rain</button></div>
+    <div class="seg" id="weather"><button data-v="dry" class="sel">Dry</button><button data-v="dynamic">Changeable</button><button data-v="rain">Rain</button></div>
     <h2>Assists</h2>
     <div class="seg" id="assist"><button data-v="full" class="sel">Full</button><button data-v="medium">Medium</button><button data-v="off">Off (sim)</button></div>
     <div class="assist-note" id="assistNote"></div>
@@ -134,8 +154,7 @@
     </div>
   </div>
 </div>
-<div id="overlay"><div class="box panel"><h2 id="ovTitle">Paused</h2><div id="results"></div>
-  <div class="btns"><button class="primary" id="bRestart">Restart (R)</button><button id="bResume">Resume (Esc)</button><button id="bMenu">Menu (M)</button></div></div></div>
+<div id="overlay"><div class="box panel"><h2 id="ovTitle">Paused</h2><div id="ovBody"></div><div class="btns" id="ovBtns"></div></div></div>
 <div id="loading" class="cond">Building circuit…</div>
 <script type="module" src="./game.js"></script>
 </body>

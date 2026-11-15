@@ -4,6 +4,8 @@ import { skidpad } from './skidpad.mjs';
 import { runRace } from './race.mjs';
 import { keyboardLap } from './keyboardbot.mjs';
 import { humanLap } from './humanbot.mjs';
+import { strategyRace } from './weekend.mjs';
+import { newCareer, applyRace, buyUpgrade, carSetup } from '../src/sim/career.js';
 let fail = 0;
 const check = (ok, msg) => { console.log((ok ? 'PASS ' : 'FAIL ') + msg); if (!ok) fail++; };
 // 1. skidpad: limit lateral grip in a believable sim-cade band, rising with downforce
@@ -32,4 +34,12 @@ for (const t of ['monza', 'spa']) {
   const race = runRace(t, 1);
   check(race.finished >= race.of - 1 && race.impacts <= 15, `${t} race: ${race.finished}/${race.of} finished, ${race.impacts} contacts`);
 }
+// 5. race weekend: tyre strategy + pit stops + changeable weather
+const sr = strategyRace('monza', 5, 'dynamic');
+check(sr.finished >= sr.of - 2 && sr.stops.every(n => n >= 1), `strategy race (Monza, changeable): ${sr.finished}/${sr.of} finished, stops ${sr.stops.join(',')}`);
+// 6. career: points, R&D, upgrades, rival
+const c = newCareer();
+const res = applyRace(c, 'silverstone', ['Mara Okonkwo', 'You', 'Dario Vell', ...Object.keys(c.standings).filter(n => !['You', 'Mara Okonkwo', 'Dario Vell'].includes(n))], { incidents: { 'Dario Vell': 2 } });
+const before = carSetup(c).powerMul; const bought = buyUpgrade(c, 'power');
+check(c.standings.You === 18 && res.rd > 0 && bought && carSetup(c).powerMul > before && c.rival, `career: P2 = 18 pts, +${res.rd} R&D, upgrade bought, rival ${c.rival}`);
 process.exit(fail ? 1 : 0);

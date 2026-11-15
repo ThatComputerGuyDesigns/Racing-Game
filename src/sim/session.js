@@ -42,7 +42,18 @@ export class Session {
     this.time = 0;
     this.state = this.mode === 'race' ? 'grid' : 'running';
     this.countdown = 0;
-    this.env = { grip: 1, temp: 24, wet: 0 };
+    this.env = { grip: 1, temp: 24, wet: 0, wearMul: opts.wearMul ?? 1 };
+    // weather timeline: 'dry' | 'rain' | 'dynamic' (rain may arrive and clear mid-session)
+    this.weatherMode = opts.weather || 'dry';
+    this.targetWet = this.weatherMode === 'rain' ? 0.8 : 0;
+    this.env.wet = this.targetWet;
+    this.weatherEvents = [];
+    if (this.weatherMode === 'dynamic') {
+      const est = (opts.estLap || 100) * this.totalLaps;
+      const t0 = est * (0.25 + this._rand() * 0.25);
+      this.weatherEvents.push({ t: t0, wet: 0.75 }, { t: t0 + est * (0.35 + this._rand() * 0.2), wet: 0 });
+    }
+    this.pitLat = -1; // pit lane on the right-hand side of the main straight
     this.events = []; // {type:'impact'|'lap'|..., ...} drained by renderer
     const { line, profile } = lineFor(track);
     this.line = line; this.profile = profile;
@@ -94,6 +105,7 @@ export class Session {
       if (this.countdown <= 0) { this.state = 'running'; this.raceStart = this.time; for (const e of this.entries) e.lapStart = this.time; this.events.push({ type: 'go' }); }
     }
     this.time += dt;
+    this._weather(dt);
     const others = this.entries.map(e => ({ car: e.car, s: e.s, hint: e.hint }));
     const h = 1 / 240;
     // fixed 240 Hz physics with an accumulator: identical behaviour at 30, 60 or 144 fps
@@ -103,7 +115,8 @@ export class Session {
     // AI decisions at frame rate, physics at 240 Hz
     const inputs = this.entries.map(e => {
       if (e.finished && e.ai == null) return { throttle: 0, brake: 0.3, steer: 0 };
-      let inp = e.ai ? e.ai.update(dt, others, this.env, racing) : (playerInput || { throttle: 0, brake: 0, steer: 0 });
+      let inp = e.pit ? e.pitAI.update(dt, others, this.env, racing)
+        : e.ai ? e.ai.update(dt, others, this.env, racing) : (playerInput || { throttle: 0, brake: 0, steer: 0 });
       if (!racing) inp = { ...inp, throttle: e.ai ? 0.35 : inp.throttle, brake: 1, steer: 0 };
       if (e.finished && e.ai) inp = { ...inp, throttle: Math.min(inp.throttle, 0.4) };
       return inp;
@@ -164,6 +177,7 @@ export class Session {
       }
       e.lap++;
       e.lapStart = this.time; e.invalid = false; e.sector = 0; e.sectorTimes = [];
+      this._strategy(e);
       if (this.mode === 'race' && e.lap > this.totalLaps && !e.finished) {
         e.finished = true; e.finishTime = this.time - this.raceStart;
         this.events.push({ type: 'finish', entry: e });
@@ -178,6 +192,78 @@ export class Session {
       e.sector = sec;
     }
     e.totalProgress = (e.lap - 1) * L + b;
+    this._pit(e, b, L);
+  }
+
+  // ---------------- pit stops ----------------
+  requestPit(e, compound) { if (!e.pit && !e.finished) { e.pitRequest = compound || e.pitRequest || 'medium'; } }
+  cancelPit(e) { if (!e.pit) e.pitRequest = null; }
+
+  _pit(e, b, L) {
+    const hw = this.track.width / 2;
+    const ENTRY = 280, EXIT = 260, BOX = 20;
+    const relS = b > L - ENTRY ? b - L : b; // negative before the line
+    if (!e.pit && e.pitRequest && relS < 0 && relS > -ENTRY && this.state === 'running') {
+      e.pit = { state: 'in', timer: 0, compound: e.pitRequest };
+      e.pitAI = e.pitAI || new AIDriver(e.car, this.track, this.line, this.profile, { name: 'pit', pace: 1, consistency: 1, aggression: 0, composure: 1 }, 3, 1);
+      e.pitAI.lat = e.lat; e.pitAI.launchDelay = 0;
+      this.events.push({ type: 'pitIn', entry: e });
+    }
+    if (!e.pit) return;
+    const P = e.pit, ai = e.pitAI;
+    ai.forceLat = this.pitLat * (hw - 1.6);
+    ai.speedCap = 22.2; // 80 km/h pit limiter
+    if (P.state === 'in') {
+      ai.stopIn = BOX - relS;
+      if (relS > -2 && relS < BOX + 6 && e.car.speed < 0.6 && ai.stopIn < 2.5) {
+        P.state = 'stopped'; P.timer = 2.4 + this._rand() * 0.8; // crew service time
+      }
+      if (relS > BOX + 10 && relS < 200) P.state = 'stopped', P.timer = 2.5; // overshot: still service
+    } else if (P.state === 'stopped') {
+      ai.stopIn = 0;
+      P.timer -= 1 / 60;
+      if (P.timer <= 0) {
+        const c = e.car;
+        // AI crews read the conditions when the car arrives
+        if (e.ai) {
+          if (this.env.wet > 0.3 || this.targetWet > 0.3) P.compound = 'inter';
+          else if (P.compound === 'inter') P.compound = 'medium';
+        }
+        c.compound = P.compound;
+        for (const w of c.wheels) { w.wear = 0; w.temp = 55; }
+        e.stops = (e.stops || 0) + 1;
+        e.pitRequest = null;
+        P.state = 'out'; ai.stopIn = null;
+        this.events.push({ type: 'pitDone', entry: e, compound: P.compound });
+      }
+    } else if (P.state === 'out') {
+      ai.stopIn = null;
+      if (relS > EXIT && relS < L / 2) { e.pit = null; ai.forceLat = null; ai.speedCap = null; if (e.ai) e.ai.lat = e.lat; }
+    }
+  }
+
+  // AI strategy, evaluated as each AI starts a lap
+  _strategy(e) {
+    if (!e.ai || e.finished || e.pit || e.pitRequest || this.mode !== 'race') return;
+    const c = e.car, lapsLeft = this.totalLaps - e.lap + 1;
+    const wear = Math.max(...c.wheels.map(w => w.wear));
+    const wet = this.env.wet;
+    if (wet > 0.35 && c.compound !== 'inter' && lapsLeft > 0) return this.requestPit(e, 'inter');
+    if (wet < 0.12 && c.compound === 'inter' && lapsLeft > 1) return this.requestPit(e, lapsLeft <= this.totalLaps * 0.4 ? 'soft' : 'medium');
+    if (lapsLeft >= 2 && (wear > 0.62 || (e.plannedStop && e.lap === e.plannedStop && !e.stops))) {
+      this.requestPit(e, lapsLeft <= Math.max(2, this.totalLaps * 0.45) ? 'soft' : 'hard');
+    }
+  }
+
+  // ---------------- weather ----------------
+  _weather(dt) {
+    for (const ev of this.weatherEvents) if (!ev.done && this.time >= ev.t) {
+      ev.done = true; this.targetWet = ev.wet;
+      this.events.push({ type: 'weather', wet: ev.wet });
+    }
+    const rate = 0.012; // wet track builds/dries over ~1 minute
+    this.env.wet += Math.max(-rate * dt, Math.min(rate * dt, this.targetWet - this.env.wet));
+    if (this.env.wet < 0.01) this.env.wet = 0;
   }
 
   _contacts() {

@@ -37,6 +37,8 @@ export class AIDriver {
     this.pressure = 0; this.noise = 0;
     this.launchDelay = 0.08 + this.rand() * 0.3 * (1.2 - (persona.consistency ?? 0.9));
     this.status = '';
+    // pit control (set by the session): forced lateral line, speed cap, stop point (track s)
+    this.forceLat = null; this.speedCap = null; this.stopIn = null;
   }
 
   update(dt, others = [], env = { wet: 0 }, racing = true) {
@@ -85,6 +87,7 @@ export class AIDriver {
       if (cost < bestCost) { bestCost = cost; best = c; }
     }
     if (this.mistake > 0 && this.mistakeKind === 'wide') best -= Math.sign(tr.curv[lookI] || 1) * 3;
+    if (this.forceLat !== null) best = this.forceLat;
     best = Math.max(-hw, Math.min(hw, best));
     const latRate = 2.2 + v * 0.03;
     this.lat += Math.max(-latRate * dt, Math.min(latRate * dt, best - this.lat));
@@ -130,6 +133,8 @@ export class AIDriver {
       if (vSafe < target) { target = vSafe; this.status = 'follow'; }
     }
 
+    if (this.speedCap !== null) target = Math.min(target, this.speedCap);
+    if (this.stopIn !== null) target = Math.min(target, Math.sqrt(2 * 7 * Math.max(0, this.stopIn - 1)));
     let throttle = 0, brake = 0;
     const err = target - v;
     if (!racing) { throttle = 0.4; brake = 1; }
@@ -138,6 +143,7 @@ export class AIDriver {
     const rearSlide = Math.max(car.wheels[2].slide, car.wheels[3].slide);
     throttle *= Math.max(0.2, Math.min(1, 1.6 - rearSlide));
     if (racing && this.launchDelay > 0) { this.launchDelay -= dt; throttle = 0; brake = 1; }
+    if (this.stopIn !== null && this.stopIn < 1.5) { throttle = 0; brake = 1; }
     return { throttle, brake, steer };
   }
 }

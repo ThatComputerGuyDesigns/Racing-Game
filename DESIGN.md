@@ -16,8 +16,16 @@ win against Vell at Spa means something because you know how Vell races.
    skid marks, PBR clearcoat paint, glass aeroscreen.
 3. **Racing AI.** Same physics and controls as the player. Racing line, overtakes off-line, gives room
    alongside, makes pressure mistakes.
-4. **Core loop.** Instant restart (R), quick race / hot lap, weather, tyre/fuel strategy (next).
-5. **Career.** Open-world paddock hub connecting circuits, rivalries, development tree (planned).
+4. **Core loop.** Qualifying sets the grid, tyre choice, wear-scaled strategy with driven pit stops,
+   changeable weather (rain arrives, track wets/dries, crews switch to intermediates), instant restart.
+5. **Career.** Free-roam coast road linking the venues (speed-trap challenges earn R&D), 6-round season,
+   points and standings, a rival chosen by standings or grudge (incidents raise heat; your rival races you
+   harder), and a development tree (power, aero, suspension, brakes, tyre management).
+
+## Assists philosophy
+Full assists must make the game easy: a co-driver steers the line when you're hands-off and blends with you
+when you steer, plus auto braking and edge protection. Assisted steering is yaw-rate based (input asks for a
+turn rate, not a wheel angle), so keyboard taps never overshoot. Verified by human-like test bots.
 
 ## Art direction
 Stylized-realistic: physically-based materials and lighting over procedural geometry. Readable silhouettes,

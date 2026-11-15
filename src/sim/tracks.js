@@ -21,6 +21,20 @@ export const TRACK_DEFS = {
 
 Object.assign(TRACK_DEFS, REAL_TRACKS);
 
+// Open-world hub: an original coastal road loop linking the venues (career free-roam).
+TRACK_DEFS.region = {
+  id: 'region', name: 'Velocity Coast Road', hub: true,
+  blurb: 'Free-roam coastal road linking every venue. Speed traps and challenges earn R&D.',
+  width: 13, runoff: 16,
+  points: [
+    [0, 0], [0, 450], [0, 900], [150, 1150], [420, 1250], [700, 1150], [820, 950], [1100, 900],
+    [1400, 1000], [1650, 850], [1700, 600], [1550, 400], [1600, 150], [1800, -50], [1750, -350],
+    [1500, -500], [1200, -450], [1000, -250], [750, -350], [500, -550], [250, -500], [100, -300],
+  ],
+  elevation: [[0, 0], [0.15, 10], [0.3, 38], [0.45, 24], [0.6, 55], [0.75, 30], [0.9, 8]],
+  start: 0.02,
+};
+
 const cache = {};
 export function getTrack(id) {
   if (!cache[id]) cache[id] = new Track(TRACK_DEFS[id]);

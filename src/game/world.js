@@ -50,7 +50,7 @@ export class World {
     ground.position.y = -5; envScene.add(ground);
     this.envMap = pm.fromScene(envScene, 0.02).texture;
     this.scene.environment = this.envMap;
-    this.scene.environmentIntensity = 1 - wet * 0.4;
+    this.scene.environmentIntensity = 0.55 - wet * 0.15;
     const fogCol = new THREE.Color(wet > 0.2 ? 0x8d949c : 0x9fb8d6);
     this.scene.fog = new THREE.Fog(fogCol, 700 - wet * 450, 5500 - wet * 4200);
 
@@ -61,8 +61,72 @@ export class World {
     const sc = sun.shadow.camera; sc.left = -70; sc.right = 70; sc.top = 70; sc.bottom = -70; sc.near = 10; sc.far = 700;
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
     this.sun = sun; this.group.add(sun); this.group.add(sun.target);
-    const hemi = new THREE.HemisphereLight(0xbcd7ff, 0x40502c, 0.5 + wet * 0.3);
-    this.group.add(hemi);
+    this._clouds(sunDir, wet);
+    const hemi = new THREE.HemisphereLight(0xbcd7ff, 0x3a4a2a, 0.22 + wet * 0.35);
+    this.group.add(hemi); this.hemi = hemi;
+  }
+
+  _clouds(sunDir, wet) {
+    // procedural animated cloud layer on a dome (fbm noise, lit from the sun side)
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { time: { value: 0 }, sunDir: { value: sunDir.clone() }, cover: { value: 0.55 + (wet ? -0.2 : 0) }, dark: { value: wet } },
+      vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      fragmentShader: `uniform float time, cover, dark; uniform vec3 sunDir; varying vec3 vP;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+        float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+        float fbm(vec2 p){ float s=0.0, a=0.5; for(int i=0;i<6;i++){ s+=a*n(p); p*=2.03; a*=0.5; } return s; }
+        void main(){
+          if (vP.y < 0.0) discard;
+          vec2 uv = vP.xz / (vP.y + 0.12) * 1.6 + vec2(time*0.004, time*0.002);
+          float d = fbm(uv);
+          float c = smoothstep(cover, cover + 0.28, d);
+          float edge = smoothstep(0.0, 0.25, vP.y);
+          float lit = 0.75 + 0.35 * max(0.0, dot(normalize(vec3(vP.x, 0.3, vP.z)), normalize(vec3(sunDir.x, 0.0, sunDir.z))));
+          float shade = 1.0 - 0.45 * smoothstep(cover, cover + 0.6, fbm(uv * 1.7 + 3.0));
+          vec3 col = mix(vec3(1.0), vec3(0.55, 0.58, 0.62), dark) * lit * shade;
+          gl_FragColor = vec4(col, c * edge * 0.92);
+        }`,
+      transparent: true, depthWrite: false, side: THREE.BackSide, fog: false,
+    });
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(4500, 48, 24), mat);
+    dome.renderOrder = -1; this.group.add(dome); this.cloudMat = mat;
+    this.cloudDome = dome;
+    // distant mountain ring for a real horizon
+    const ring = new THREE.CylinderGeometry(5200, 5200, 1, 160, 1, true);
+    const pos = ring.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i), a = Math.atan2(z, x);
+      if (pos.getY(i) > 0) pos.setY(i, 120 + fbm(Math.cos(a) * 3 + 10, Math.sin(a) * 3) * 700 + Math.abs(Math.sin(a * 7.0)) * 160);
+      else pos.setY(i, -60);
+    }
+    ring.computeVertexNormals();
+    const mtn = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: wet > 0.2 ? 0x7b838c : 0x7d93ad, side: THREE.BackSide, fog: false }));
+    this.mountains = mtn; this.group.add(mtn);
+  }
+
+  update(dt, camPos) {
+    if (this.cloudMat) this.cloudMat.uniforms.time.value += dt;
+    if (camPos) { this.cloudDome.position.set(camPos.x, 0, camPos.z); this.mountains.position.set(camPos.x, 0, camPos.z); }
+  }
+
+  /** Blend visuals between dry (0) and soaked (1): road sheen, fog, light, clouds. */
+  setWet(w) {
+    if (Math.abs((this._wet ?? -1) - w) < 0.004) return;
+    this._wet = w;
+    const r = this.roadMat;
+    r.roughness = 0.78 - w * 0.66; r.envMapIntensity = 0.35 + w * 2.0;
+    r.color.setScalar(1 - w * 0.4);
+    this.terrainMat.color.setRGB(1 - w * 0.3, 1 - w * 0.25, 1 - w * 0.3);
+    for (const g of this.grassMats) g.color.setRGB(0.78 - w * 0.2, 0.85 - w * 0.2, 0.69 - w * 0.15);
+    const dry = new THREE.Color(0x9fb8d6), wetC = new THREE.Color(0x8d949c);
+    this.scene.fog.color.copy(dry).lerp(wetC, w);
+    this.scene.fog.near = 700 - w * 520; this.scene.fog.far = 5500 - w * 4300;
+    this.sun.intensity = 3.2 * (1 - w * 0.7);
+    this.hemi.intensity = 0.22 + w * 0.4;
+    this.scene.environmentIntensity = 0.55 - w * 0.2;
+    this.cloudMat.uniforms.cover.value = 0.55 - w * 0.4;
+    this.cloudMat.uniforms.dark.value = w;
+    this.sky.material.uniforms.turbidity.value = 2.5 + w * 12;
   }
 
   /** keep the shadow frustum centred on the action */
@@ -108,10 +172,19 @@ export class World {
       uv.setXY(i, x / 18, z / 18);
     }
     geo.computeVertexNormals();
+    // colour variation: meadow patches, dry grass, darker hollows
+    const cols = new Float32Array(pos.count * 3), c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const a = fbm(x * 0.006, z * 0.006), b2 = fbm(x * 0.03 + 7, z * 0.03);
+      c.setHSL(0.22 + a * 0.12, 0.35 + b2 * 0.3, 0.52 + a * 0.35 + b2 * 0.12);
+      cols.set([c.r * 1.6, c.g * 1.6, c.b * 1.6], i * 3);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     const tex = TX.grassTexture(this.renderer);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, color: this.weather.wet > 0.3 ? 0xa8b8a0 : 0xffffff });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, vertexColors: true, roughness: 0.95, envMapIntensity: 0.3, color: this.weather.wet > 0.3 ? 0xa8b8a0 : 0xffffff });
     const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true;
-    this.group.add(mesh);
+    this.group.add(mesh); this.terrainMat = mat;
     // distant ground ring so the horizon isn't empty
     const far = new THREE.Mesh(new THREE.PlaneGeometry(20000, 20000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3a5a2a, roughness: 1 }));
     far.position.set(cx, -12, cz); this.group.add(far);
@@ -153,14 +226,16 @@ export class World {
     const t = this.track, hw = t.width / 2, wet = this.weather.wet;
     const asphalt = TX.asphaltTexture(this.renderer);
     const roadMat = new THREE.MeshStandardMaterial({
-      map: asphalt, roughness: 0.82 - wet * 0.62, metalness: 0.0, color: wet > 0.2 ? 0x9a9a9a : 0xffffff,
-      envMapIntensity: 0.6 + wet * 1.6,
+      map: asphalt, normalMap: TX.asphaltNormal(), normalScale: new THREE.Vector2(0.6, 0.6),
+      roughness: 0.78 - wet * 0.62, metalness: 0.0, color: wet > 0.2 ? 0x8a8a8a : 0xffffff,
+      envMapIntensity: 0.35 + wet * 1.8,
     });
-    this.roadMat = roadMat;
+    this.roadMat = roadMat; this.grassMats = [];
     const road = new THREE.Mesh(this._ribbon(hw, -hw, 0.06, 'track', null, 1 / 24), roadMat);
     road.receiveShadow = true; this.group.add(road);
     // grass shoulders follow the track elevation and overlap the terrain
-    const grassMat = new THREE.MeshStandardMaterial({ map: TX.grassTexture(this.renderer), roughness: 0.95, color: wet > 0.3 ? 0xa8b8a0 : 0xffffff });
+    const grassMat = new THREE.MeshStandardMaterial({ map: TX.grassTexture(this.renderer), roughness: 0.95, envMapIntensity: 0.3, color: wet > 0.3 ? 0x98a890 : 0xc8d8b0 });
+    this.grassMats.push(grassMat);
     const runoffMat = new THREE.MeshStandardMaterial({ color: 0x8c8378, roughness: 0.97 });
     for (const sgn of [1, -1]) {
       // gravel/asphalt runoff strip near the edge at corners, grass elsewhere
@@ -181,6 +256,21 @@ export class World {
       const lat = sgn * (hw + t.runoff);
       this.group.add(this._wall(lat, 0.05, 1.1, bMat, true));
       this.group.add(this._wall(lat, -3.0, 0.05, skirtMat, false));
+    }
+    // catch fences behind the barriers (alpha-tested diamond mesh)
+    const fenceMat = new THREE.MeshStandardMaterial({ map: TX.fenceTexture(), alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.6, roughness: 0.5 });
+    for (const sgn of [1, -1]) {
+      const f = this._wall(sgn * (hw + t.runoff + 0.4), 1.1, 4.2, fenceMat, false);
+      f.material.map.repeat.set(3, 3); this.group.add(f);
+    }
+    // sponsor gantries spanning the track
+    const steel = new THREE.MeshStandardMaterial({ color: 0x30343b, metalness: 0.7, roughness: 0.4 });
+    for (const frac of [0.22, 0.47, 0.73]) {
+      const p = t.pointAt(t.length * frac), g = new THREE.Group(), span = t.width + 2 * t.runoff + 2;
+      for (const sd of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 9, 0.6), steel); post.position.set(sd * span / 2, 4.5, 0); post.castShadow = true; g.add(post); }
+      const banner = new THREE.Mesh(new THREE.BoxGeometry(span, 2.2, 0.5), [steel, steel, steel, steel, new THREE.MeshStandardMaterial({ map: TX.bannerTexture(frac), roughness: 0.6 }), new THREE.MeshStandardMaterial({ map: TX.bannerTexture(frac + 0.3), roughness: 0.6 })]);
+      banner.position.y = 8.2; banner.castShadow = true; g.add(banner);
+      g.position.set(p.x, p.h, p.z); g.rotation.y = p.yaw; this.group.add(g);
     }
     // start/finish line
     const sS = t.length * (t.def.start ?? 0);
@@ -265,20 +355,39 @@ export class World {
       if (n.d < hw + t.runoff + 10 || n.d > 520) continue;
       trees.push([x, this.terrainHeight(x, z), z, 0.7 + R() * 0.8, R()]);
     }
-    const foliageGeo = new THREE.ConeGeometry(2.6, 9, 7).translate(0, 7.5, 0);
-    const trunkGeo = new THREE.CylinderGeometry(0.25, 0.35, 3.5, 5).translate(0, 1.75, 0);
-    const fol = new THREE.InstancedMesh(foliageGeo, new THREE.MeshStandardMaterial({ color: 0x2f4f23, roughness: 0.9 }), trees.length);
+    const mergeGeos = (list) => {
+      // tiny merge helper (non-indexed) so each tree type is one instanced draw
+      const parts = list.map(g => g.index ? g.toNonIndexed() : g);
+      const total = parts.reduce((a, g) => a + g.attributes.position.count, 0);
+      const P = new Float32Array(total * 3), N = new Float32Array(total * 3); let o = 0;
+      for (const g of parts) { P.set(g.attributes.position.array, o * 3); N.set(g.attributes.normal.array, o * 3); o += g.attributes.position.count; }
+      const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(P, 3)); out.setAttribute('normal', new THREE.BufferAttribute(N, 3)); return out;
+    };
+    const pineGeo = mergeGeos([
+      new THREE.ConeGeometry(3.0, 5.5, 8).translate(0, 5.0, 0), new THREE.ConeGeometry(2.4, 4.8, 8).translate(0, 8.0, 0),
+      new THREE.ConeGeometry(1.6, 4.0, 8).translate(0, 10.8, 0), new THREE.ConeGeometry(0.9, 2.8, 6).translate(0, 13.0, 0)]);
+    const leafGeo = mergeGeos([
+      new THREE.IcosahedronGeometry(3.2, 1).translate(0, 7.2, 0), new THREE.IcosahedronGeometry(2.4, 1).translate(1.8, 8.6, 0.6),
+      new THREE.IcosahedronGeometry(2.2, 1).translate(-1.6, 8.2, -0.8), new THREE.IcosahedronGeometry(1.8, 1).translate(0.2, 10.0, 0.2)]);
+    const trunkGeo = new THREE.CylinderGeometry(0.22, 0.4, 5, 6).translate(0, 2.5, 0);
+    const pines = trees.filter(t2 => t2[4] < 0.55), leafs = trees.filter(t2 => t2[4] >= 0.55);
+    const folMat = new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true, envMapIntensity: 0.25 });
+    const mk = (geo, list) => { const im = new THREE.InstancedMesh(geo, folMat, Math.max(1, list.length)); im.count = list.length; im.castShadow = true; im.receiveShadow = true; return im; };
+    const pineM = mk(pineGeo, pines), leafM = mk(leafGeo, leafs);
     const trk = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1 }), trees.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3();
-    const col = new THREE.Color();
-    trees.forEach((tr, k) => {
-      sc.setScalar(tr[3]); ps.set(tr[0], tr[1] - 0.3, tr[2]);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), tr[4] * 6);
-      m.compose(ps, q, sc); fol.setMatrixAt(k, m); trk.setMatrixAt(k, m);
-      col.setHSL(0.25 + tr[4] * 0.08, 0.45, 0.22 + tr[4] * 0.1); fol.setColorAt(k, col);
+    const col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+    const place = (im, list, pine) => list.forEach((tr, k) => {
+      sc.set(tr[3], tr[3] * (0.85 + tr[4] * 0.4), tr[3]); ps.set(tr[0], tr[1] - 0.3, tr[2]);
+      q.setFromAxisAngle(up, tr[4] * 40);
+      m.compose(ps, q, sc); im.setMatrixAt(k, m);
+      if (pine) col.setHSL(0.30 + tr[4] * 0.06, 0.42, 0.16 + tr[4] * 0.08); else col.setHSL(0.20 + (tr[4] - 0.55) * 0.25, 0.5, 0.24 + (tr[4] - 0.55) * 0.2);
+      im.setColorAt(k, col);
     });
-    fol.castShadow = true; fol.receiveShadow = true; trk.castShadow = true;
-    this.group.add(fol, trk);
+    place(pineM, pines, true); place(leafM, leafs, false);
+    trees.forEach((tr, k) => { sc.setScalar(tr[3]); ps.set(tr[0], tr[1] - 0.3, tr[2]); m.compose(ps, q.identity(), sc); trk.setMatrixAt(k, m); });
+    trk.castShadow = true;
+    this.group.add(pineM, leafM, trk);
 
     // grandstands + pit building along the start straight
     const crowd = TX.crowdTexture();

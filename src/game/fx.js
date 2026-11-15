@@ -153,7 +153,7 @@ export function makeComposer(renderer, scene, camera, low = false) {
   const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: low ? 0 : 4 });
   const composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.35, 0.5, 0.92);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.22, 0.25, 2.2);
   if (!low) composer.addPass(bloom);
   const final = new ShaderPass(FinalShader);
   composer.addPass(final);
